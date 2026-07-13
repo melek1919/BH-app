@@ -1,7 +1,7 @@
 import Joi from 'joi';
 
 const vehiculeSchema = Joi.object({
-    contrat_id: Joi.number().integer().positive().required(),
+    etablissement_id: Joi.number().integer().positive().required(),
     immatriculation: Joi.string().max(150).trim().allow('', null),
     usage: Joi.string().max(150).trim().allow('', null),
     type_vehicule: Joi.string().max(150).trim().allow('', null),
@@ -11,7 +11,7 @@ const vehiculeSchema = Joi.object({
     puissance: Joi.number().precision(2).positive().allow(null),
     pvid: Joi.number().precision(2).positive().allow(null),
     ptac: Joi.number().precision(2).positive().allow(null),
-    nb_places_assises: Joi.number().integer().positive().allow(null),
+    nb_places: Joi.number().integer().positive().allow(null),
     dmc: Joi.date().allow(null),
 });
 

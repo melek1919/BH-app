@@ -1,4 +1,4 @@
-import pool from '../config/database.js'; // vérifie ce chemin selon ta structure réelle
+import pool from '../config/database.js';
 
 const findAll = async () => {
     const { rows } = await pool.query('SELECT * FROM etablissement ORDER BY id');
@@ -39,9 +39,47 @@ const update = async (id, etablissement) => {
     return rows[0];
 };
 
-const remove = async (id) => {
-    const { rowCount } = await pool.query('DELETE FROM etablissement WHERE id = $1', [id]);
-    return rowCount > 0; // <-- corrigé
+// Action séparée : affecter/modifier le numéro de contrat
+const affecterContrat = async (id, { numero_police, validite_du, validite_au }) => {
+    const { rows } = await pool.query(
+        `UPDATE etablissement
+         SET numero_police = $1, validite_du = $2, validite_au = $3
+         WHERE id = $4
+         RETURNING *`,
+        [numero_police, validite_du, validite_au, id]
+    );
+    return rows[0];
 };
 
-export default { findAll, findById, create, update, remove };
+// Fusion : réaffecte les véhicules de source vers cible, supprime source
+const fusionner = async (sourceId, cibleId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        await client.query(
+            'UPDATE vehicule SET etablissement_id = $1 WHERE etablissement_id = $2',
+            [cibleId, sourceId]
+        );
+
+        const { rows } = await client.query(
+            'DELETE FROM etablissement WHERE id = $1 RETURNING *',
+            [sourceId]
+        );
+
+        await client.query('COMMIT');
+        return rows[0];
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
+};
+
+const remove = async (id) => {
+    const { rowCount } = await pool.query('DELETE FROM etablissement WHERE id = $1', [id]);
+    return rowCount > 0;
+};
+
+export default { findAll, findById, create, update, affecterContrat, fusionner, remove };
