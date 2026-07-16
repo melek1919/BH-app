@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Car, Search, Plus, X, RotateCcw, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Car, Search, Plus, X, RotateCcw, Trash2, Pencil, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { vehiculesApi, etablissementsApi } from "../services/api";
 
 // Couleurs de marque — mêmes tokens que SidebarLayout.jsx / DashboardPage.jsx
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
 const BORDER = "#E4E8EE";
-
-// Ajuste selon l'URL réelle de ton backend (ou utilise une variable d'env Vite : import.meta.env.VITE_API_URL)
-const API_BASE = "http://localhost:5000/api";
 
 const USAGE_OPTIONS = [
   "Véhicule de tourisme",
@@ -31,6 +29,16 @@ const STATUT_STYLE = {
   retire: { bg: "#F1F2F4", fg: "#6B7684", label: "Retiré" },
 };
 
+const EMPTY_FORM = {
+  etablissement_id: "",
+  immatriculation: "",
+  usage: USAGE_OPTIONS[0],
+  marque: "",
+  numero_serie: "",
+  puissance: "",
+  nb_places: "",
+};
+
 function StatusBadge({ statut }) {
   const s = STATUT_STYLE[statut] || STATUT_STYLE.retire;
   return (
@@ -40,17 +48,24 @@ function StatusBadge({ statut }) {
   );
 }
 
-function AddVehiculeModal({ etablissements, onClose, onCreate, submitting }) {
-  const [form, setForm] = useState({
-    etablissement_id: "",
-    immatriculation: "",
-    usage: USAGE_OPTIONS[0],
-    marque: "",
-    numero_serie: "",
-    puissance: "",
-    nb_places: "",
-  });
+// Modale unique pour ajout ET modification — le mode change juste le titre,
+// le libellé du bouton, et si les champs sont préremplis.
+// En mode création, la modale reste ouverte après un ajout réussi (le formulaire
+// se vide pour en saisir un autre) — seul le X ferme la modale dans ce cas.
+function VehiculeModal({ mode = "create", initialData, etablissements, onClose, onSubmit, submitting, justCreated }) {
+  const [form, setForm] = useState(initialData || EMPTY_FORM);
   const [errors, setErrors] = useState({});
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    if (justCreated) {
+      setForm(EMPTY_FORM);
+      setErrors({});
+      setShowSuccess(true);
+      const t = setTimeout(() => setShowSuccess(false), 2500);
+      return () => clearTimeout(t);
+    }
+  }, [justCreated]);
 
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -61,7 +76,7 @@ function AddVehiculeModal({ etablissements, onClose, onCreate, submitting }) {
     if (!form.nb_places) nextErrors.nb_places = "Champ requis";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    onCreate(form);
+    onSubmit(form);
   };
 
   return (
@@ -72,11 +87,19 @@ function AddVehiculeModal({ etablissements, onClose, onCreate, submitting }) {
     >
       <div className="bg-white rounded-4 p-4" style={{ width: 420, maxWidth: "92vw" }}>
         <div className="d-flex align-items-center justify-content-between mb-3">
-          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Ajouter un véhicule</p>
+          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>
+            {mode === "edit" ? "Modifier le véhicule" : "Ajouter un véhicule"}
+          </p>
           <button className="btn btn-sm border-0 p-1" onClick={onClose}>
             <X size={18} color={MUTED} />
           </button>
         </div>
+
+        {showSuccess && (
+          <div className="d-flex align-items-center gap-2 p-2 rounded-3 mb-3" style={{ background: "#E7F5EC", color: "#1E7B3A", fontSize: 12.5 }}>
+            <CheckCircle2 size={15} /> Véhicule ajouté — vous pouvez en saisir un autre.
+          </div>
+        )}
 
         <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Établissement *</label>
         <select
@@ -150,7 +173,7 @@ function AddVehiculeModal({ etablissements, onClose, onCreate, submitting }) {
             disabled={submitting}
           >
             {submitting && <Loader2 size={14} className="spin" />}
-            Ajouter
+            {mode === "edit" ? "Enregistrer" : "Ajouter"}
           </button>
         </div>
       </div>
@@ -165,8 +188,12 @@ export default function VehiculesPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [statutFilter, setStatutFilter] = useState("actif");
-  const [showModal, setShowModal] = useState(false);
+
+  // Un seul state pilote la modale : null = fermée, "create" = ajout, "edit" = édition
+  const [modalMode, setModalMode] = useState(null);
+  const [editingVehicule, setEditingVehicule] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [justCreated, setJustCreated] = useState(false);
 
   const etabById = useMemo(() => {
     const map = {};
@@ -174,28 +201,21 @@ export default function VehiculesPage() {
     return map;
   }, [etablissements]);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
     setError(null);
-
-    const vehiculesUrl = statutFilter === "retire" ? `${API_BASE}/vehicules/retires` : `${API_BASE}/vehicules`;
-
-    Promise.all([
-      fetch(vehiculesUrl).then((r) => {
-        if (!r.ok) throw new Error("Impossible de charger les véhicules");
-        return r.json();
-      }),
-      fetch(`${API_BASE}/etablissements`).then((r) => {
-        if (!r.ok) throw new Error("Impossible de charger les établissements");
-        return r.json();
-      }),
-    ])
-      .then(([vehiculesData, etabData]) => {
-        setVehicules(vehiculesData);
-        setEtablissements(etabData);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    try {
+      const [vehiculesData, etabData] = await Promise.all([
+        statutFilter === "retire" ? vehiculesApi.getRetires() : vehiculesApi.getAll(),
+        etablissementsApi.getAll(),
+      ]);
+      setVehicules(vehiculesData);
+      setEtablissements(etabData);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -216,27 +236,44 @@ export default function VehiculesPage() {
     });
   }, [vehicules, search, etabById]);
 
-  const handleCreate = async (form) => {
+  const buildPayload = (form) => ({
+    etablissement_id: Number(form.etablissement_id),
+    immatriculation: form.immatriculation,
+    usage: form.usage,
+    marque: form.marque || null,
+    numero_serie: form.numero_serie || null,
+    puissance: form.puissance ? Number(form.puissance) : null,
+    nb_places: Number(form.nb_places),
+  });
+
+  const openCreate = () => {
+    setEditingVehicule(null);
+    setJustCreated(false);
+    setModalMode("create");
+  };
+
+  const openEdit = (v) => {
+    setEditingVehicule(v);
+    setJustCreated(false);
+    setModalMode("edit");
+  };
+
+  const closeModal = () => {
+    setModalMode(null);
+    setEditingVehicule(null);
+    setJustCreated(false);
+  };
+
+  const handleSubmitModal = async (form) => {
     setSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/vehicules`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          etablissement_id: Number(form.etablissement_id),
-          immatriculation: form.immatriculation,
-          usage: form.usage,
-          marque: form.marque || null,
-          numero_serie: form.numero_serie || null,
-          puissance: form.puissance ? Number(form.puissance) : null,
-          nb_places: Number(form.nb_places),
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || "Erreur lors de la création");
+      if (modalMode === "edit") {
+        await vehiculesApi.update(editingVehicule.id, buildPayload(form));
+        closeModal();
+      } else {
+        await vehiculesApi.create(buildPayload(form));
+        setJustCreated(true); // reste ouverte : reset du formulaire + bandeau de succès
       }
-      setShowModal(false);
       loadData();
     } catch (err) {
       alert(err.message);
@@ -246,59 +283,79 @@ export default function VehiculesPage() {
   };
 
   const toggleStatut = async (v) => {
-    const isActif = v.statut_retrait === "actif";
-    const url = `${API_BASE}/vehicules/${v.id}/${isActif ? "retirer" : "restaurer"}`;
     try {
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: isActif ? JSON.stringify({ motif_retrait: "" }) : undefined,
-      });
-      if (!res.ok) throw new Error("Action impossible");
+      if (v.statut_retrait === "actif") {
+        await vehiculesApi.retirer(v.id);
+      } else {
+        await vehiculesApi.restaurer(v.id);
+      }
       loadData();
     } catch (err) {
       alert(err.message);
     }
   };
 
+  const totalActifs = statutFilter === "actif" ? filtered.length : vehicules.filter((v) => v.statut_retrait === "actif").length;
+
   return (
     <div>
-      <div className="d-flex align-items-center justify-content-between mb-3">
+      <div className="d-flex align-items-center justify-content-between mb-4">
         <div>
-          <p className="mb-0 fw-semibold" style={{ fontSize: 16 }}>Véhicules</p>
+          <p className="mb-0 fw-semibold" style={{ fontSize: 18, color: "#161B22" }}>Véhicules</p>
           <p className="mb-0" style={{ fontSize: 13, color: MUTED }}>
-            {loading ? "Chargement..." : `${filtered.length} véhicule${filtered.length > 1 ? "s" : ""}`}
+            Gestion du parc automobile des établissements
           </p>
         </div>
         <button
-          className="btn d-flex align-items-center gap-1 text-white"
-          style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }}
-          onClick={() => setShowModal(true)}
+          className="btn d-flex align-items-center gap-2 text-white rounded-3"
+          style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }}
+          onClick={openCreate}
         >
           <Plus size={15} /> Ajouter un véhicule
         </button>
       </div>
 
-      <div className="d-flex gap-2 mb-3">
-        <div className="position-relative flex-grow-1" style={{ maxWidth: 320 }}>
-          <Search size={14} color={MUTED} style={{ position: "absolute", left: 10, top: 10 }} />
-          <input
-            className="form-control"
-            style={{ fontSize: 13, paddingLeft: 32, borderColor: BORDER }}
-            placeholder="Immatriculation, marque, établissement..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div className="d-flex align-items-center gap-2">
+          <div className="position-relative">
+            <Search size={14} color={MUTED} style={{ position: "absolute", left: 12, top: 11 }} />
+            <input
+              className="form-control rounded-3"
+              style={{ fontSize: 13, paddingLeft: 34, width: 280, borderColor: BORDER }}
+              placeholder="Rechercher un véhicule..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="d-flex align-items-center rounded-3 p-1" style={{ backgroundColor: "#F1F2F4" }}>
+            {[
+              { key: "actif", label: "Actifs" },
+              { key: "retire", label: "Retirés" },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                className="btn btn-sm border-0"
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  padding: "5px 14px",
+                  borderRadius: 8,
+                  backgroundColor: statutFilter === opt.key ? "#fff" : "transparent",
+                  color: statutFilter === opt.key ? NAVY : MUTED,
+                  boxShadow: statutFilter === opt.key ? "0 1px 3px rgba(11,31,56,0.12)" : "none",
+                }}
+                onClick={() => setStatutFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <select
-          className="form-select"
-          style={{ fontSize: 13, width: 160, borderColor: BORDER }}
-          value={statutFilter}
-          onChange={(e) => setStatutFilter(e.target.value)}
-        >
-          <option value="actif">Actifs</option>
-          <option value="retire">Retirés</option>
-        </select>
+
+        <span style={{ fontSize: 12.5, color: MUTED }}>
+          {loading ? "Chargement..." : `${filtered.length} véhicule${filtered.length > 1 ? "s" : ""}`}
+        </span>
       </div>
 
       {error && (
@@ -310,7 +367,7 @@ export default function VehiculesPage() {
         </div>
       )}
 
-      <div className="rounded-4 bg-white overflow-hidden" style={{ border: `1px solid ${BORDER}` }}>
+      <div className="rounded-4 bg-white overflow-hidden" style={{ border: `1px solid ${BORDER}`, boxShadow: "0 1px 2px rgba(11,31,56,0.04)" }}>
         {loading ? (
           <div className="d-flex align-items-center justify-content-center py-5" style={{ color: MUTED, fontSize: 13 }}>
             <Loader2 size={18} className="spin me-2" /> Chargement des véhicules...
@@ -322,7 +379,7 @@ export default function VehiculesPage() {
         ) : (
           <table className="w-100" style={{ borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Véhicule</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Établissement</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Usage</th>
@@ -371,22 +428,36 @@ export default function VehiculesPage() {
                     <td style={{ padding: "12px 8px" }}>
                       <StatusBadge statut={v.statut_retrait} />
                     </td>
-                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                      <button
-                        className="btn btn-sm d-flex align-items-center gap-1 ms-auto"
-                        style={{ fontSize: 12, borderColor: isActif ? "#F0C9C9" : BORDER, color: isActif ? "#B3261E" : NAVY }}
-                        onClick={() => toggleStatut(v)}
-                      >
-                        {isActif ? (
-                          <>
-                            <Trash2 size={13} /> Retirer
-                          </>
-                        ) : (
-                          <>
-                            <RotateCcw size={13} /> Restaurer
-                          </>
-                        )}
-                      </button>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div className="d-flex align-items-center gap-2 justify-content-end">
+                        <button
+                          className="btn btn-sm d-flex align-items-center gap-1 "
+                          style={{
+  fontSize: 12,
+  backgroundColor: "#FFFFFF",
+  color: "#0D6EFD",
+  borderColor: "#0D6EFD",
+}}
+                          onClick={() => openEdit(v)}
+                        >
+                          <Pencil size={13} /> Modifier
+                        </button>
+                        <button
+                          className="btn btn-sm d-flex align-items-center gap-1"
+                          style={{ fontSize: 12, borderColor: isActif ? "#F0C9C9" : BORDER, color: isActif ? "#B3261E" : NAVY }}
+                          onClick={() => toggleStatut(v)}
+                        >
+                          {isActif ? (
+                            <>
+                              <Trash2 size={13} /> Retirer
+                            </>
+                          ) : (
+                            <>
+                              <RotateCcw size={13} /> Restaurer
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -396,12 +467,27 @@ export default function VehiculesPage() {
         )}
       </div>
 
-      {showModal && (
-        <AddVehiculeModal
+      {modalMode && (
+        <VehiculeModal
+          mode={modalMode}
+          initialData={
+            modalMode === "edit" && editingVehicule
+              ? {
+                  etablissement_id: String(editingVehicule.etablissement_id),
+                  immatriculation: editingVehicule.immatriculation || "",
+                  usage: editingVehicule.usage || USAGE_OPTIONS[0],
+                  marque: editingVehicule.marque || "",
+                  numero_serie: editingVehicule.numero_serie || "",
+                  puissance: editingVehicule.puissance || "",
+                  nb_places: editingVehicule.nb_places || "",
+                }
+              : null
+          }
           etablissements={etablissements}
-          onClose={() => setShowModal(false)}
-          onCreate={handleCreate}
+          onClose={closeModal}
+          onSubmit={handleSubmitModal}
           submitting={submitting}
+          justCreated={justCreated}
         />
       )}
 

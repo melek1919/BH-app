@@ -51,12 +51,8 @@ const update = async (req, res, next) => {
 };
 
 const retirer = async (req, res, next) => {
-    const { error, value } = retraitSchema.validate(req.body, { abortEarly: false });
-    if (error) {
-        return res.status(400).json({ message: 'données invalides', details: error.details.map((d) => d.message) });
-    }
     try {
-        const retire = await model.retirer(req.params.id, value.motif_retrait);
+        const retire = await model.retirer(req.params.id);
         if (!retire) return res.status(404).json({ message: 'vehicule introuvable ou déjà retiré' });
         res.json(retire);
     } catch (err) { next(err); }

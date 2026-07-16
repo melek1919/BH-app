@@ -13,12 +13,7 @@ const etablissementSchema = Joi.object({
     statut_gias_prod: Joi.string().max(100).trim().allow('', null),
 });
 
-const contratSchema = Joi.object({
-    numero_police: Joi.string().max(50).trim().required(),
-    validite_du: Joi.date().required(),
-    validite_au: Joi.date().greater(Joi.ref('validite_du')).required()
-        .messages({ 'date.greater': 'La date de fin doit être après la date de début' }),
-});
+
 
 const fusionSchema = Joi.object({
     source_id: Joi.number().integer().positive().required(),

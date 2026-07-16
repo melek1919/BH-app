@@ -1,7 +1,7 @@
 import { useState } from "react";
 import SidebarLayout from "./components/layout/SidebarLayout";
 import DashboardPage from "./pages/DashboardPage";
-//import EtablissementsPage from "./pages/EtablissementsPage";
+import EtablissementsPage from "./pages/EtablissementsPage";
 import VehiculesPage from "./pages/VehiculesPage";
 
 function App() {

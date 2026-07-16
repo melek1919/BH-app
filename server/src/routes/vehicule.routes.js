@@ -8,7 +8,7 @@ router.get('/etablissement/:etablissementId', controller.getByEtablissement);
 router.get("/:id", controller.getOne);
 router.post("/", controller.create);
 router.put("/:id", controller.update);
-router.put("/retirer/:id", controller.retirer);
-router.put("/restaurer/:id", controller.restaurer);
+router.put("/:id/retirer", controller.retirer);
+router.put("/:id/restaurer", controller.restaurer);
 
 export default router;
