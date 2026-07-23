@@ -1,7 +1,7 @@
 import Joi from 'joi';
 
 const vehiculeSchema = Joi.object({
-    etablissement_id: Joi.number().integer().positive().required(),
+    contrat_id: Joi.number().integer().positive().required(),
     immatriculation: Joi.string().max(150).trim().allow('', null),
     usage: Joi.string().max(150).trim().allow('', null),
     type_vehicule: Joi.string().max(150).trim().allow('', null),

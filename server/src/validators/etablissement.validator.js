@@ -20,4 +20,4 @@ const fusionSchema = Joi.object({
     cible_id: Joi.number().integer().positive().required(),
 });
 
-export { etablissementSchema, contratSchema, fusionSchema };
+export { etablissementSchema, fusionSchema };

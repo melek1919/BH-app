@@ -1,84 +1,44 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   Search,
   Plus,
   X,
   Pencil,
-  FileText,
+  GitMerge,
   Loader2,
   AlertCircle,
   CheckCircle2,
-  Hash,
-  Car,
-  ArrowUpRight,
-  BarChart3,
+  FileText,
+  Phone,
+  Mail,
+  User,
+  ChevronRight,
+  Upload,
+  FileSpreadsheet,
 } from "lucide-react";
-import { etablissementsApi, vehiculesApi } from "../services/api";
+import { etablissementsApi, contratsApi, importApi } from "../services/api";
 
-// Couleurs de marque — mêmes tokens que SidebarLayout.jsx / VehiculesPage.jsx
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
 const BORDER = "#E4E8EE";
 
-const GOUVERNORATS = [
-  "Tunis", "Ariana", "Ben Arous", "Manouba", "Nabeul", "Zaghouan",
-  "Bizerte", "Béja", "Jendouba", "Le Kef", "Siliana", "Sousse",
-  "Monastir", "Mahdia", "Sfax", "Kairouan", "Kasserine", "Sidi Bouzid",
-  "Gabès", "Médenine", "Tataouine", "Gafsa", "Tozeur", "Kébili",
-];
-
-const EMPTY_FORM = {
+const EMPTY_ETAB_FORM = {
   nom: "",
-  identifiant_unique: "",
   adresse: "",
-  gouvernorat: GOUVERNORATS[0],
-  responsable_parc_auto: "",
+  gouvernorat: "",
+  identifiant_unique: "",
   telephone: "",
+  responsable_parc_auto: "",
   mobile: "",
   email: "",
+  statut_gias_prod: "",
+  code_fiabilisation: "",
 };
 
-const EMPTY_CONTRAT_FORM = { numero_police: "", validite_du: "", validite_au: "" };
-
-function ContratBadge({ etablissement }) {
-  if (!etablissement.numero_police) {
-    return (
-      <span
-        className="d-inline-flex align-items-center gap-1"
-        style={{ fontSize: 11.5, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: "#FDF1DE", color: "#A15C00" }}
-      >
-        <Hash size={12} /> Non affecté
-      </span>
-    );
-  }
-  return (
-    <span
-      style={{ fontSize: 11.5, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: "#E7F5EC", color: "#1E7B3A", fontFamily: "monospace" }}
-    >
-      {etablissement.numero_police}
-    </span>
-  );
-}
-
-// Modale ajout / modification d'un établissement.
-// Même comportement que VehiculeModal : en création, la modale reste ouverte
-// après un ajout réussi et le formulaire se réinitialise.
-function EtablissementModal({ mode = "create", initialData, onClose, onSubmit, submitting, justCreated }) {
-  const [form, setForm] = useState(initialData || EMPTY_FORM);
+function EtablissementModal({ mode, initialData, onClose, onSubmit, submitting }) {
+  const [form, setForm] = useState(initialData || EMPTY_ETAB_FORM);
   const [errors, setErrors] = useState({});
-  const [showSuccess, setShowSuccess] = useState(false);
-
-  useEffect(() => {
-    if (justCreated) {
-      setForm(EMPTY_FORM);
-      setErrors({});
-      setShowSuccess(true);
-      const t = setTimeout(() => setShowSuccess(false), 2500);
-      return () => clearTimeout(t);
-    }
-  }, [justCreated]);
-
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   const handleSubmit = () => {
@@ -87,100 +47,84 @@ function EtablissementModal({ mode = "create", initialData, onClose, onSubmit, s
     if (!form.identifiant_unique.trim()) nextErrors.identifiant_unique = "Champ requis";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    onSubmit(form);
+    // Convert empty strings to null for optional fields
+    const payload = {
+      nom: form.nom,
+      identifiant_unique: form.identifiant_unique,
+      adresse: form.adresse || null,
+      gouvernorat: form.gouvernorat || null,
+      telephone: form.telephone || null,
+      responsable_parc_auto: form.responsable_parc_auto || null,
+      mobile: form.mobile || null,
+      email: form.email || null,
+      statut_gias_prod: form.statut_gias_prod || null,
+    };
+    // Only include code_fiabilisation if it has a valid value
+    if (form.code_fiabilisation && ['A', 'B', 'C', 'D', 'M'].includes(form.code_fiabilisation)) {
+      payload.code_fiabilisation = form.code_fiabilisation;
+    }
+    onSubmit(payload);
   };
 
   return (
     <div
       className="d-flex align-items-center justify-content-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 50 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 60 }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-4 p-4" style={{ width: 460, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto" }}>
+      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 460, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto" }}>
         <div className="d-flex align-items-center justify-content-between mb-3">
           <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>
-            {mode === "edit" ? "Modifier l'établissement" : "Ajouter un établissement"}
+            {mode === "edit" ? "Modifier l'établissement" : "Nouvel établissement"}
           </p>
-          <button className="btn btn-sm border-0 p-1" onClick={onClose}>
-            <X size={18} color={MUTED} />
-          </button>
+          <button className="btn btn-sm border-0 p-1" onClick={onClose}><X size={18} color={MUTED} /></button>
         </div>
 
-        {showSuccess && (
-          <div className="d-flex align-items-center gap-2 p-2 rounded-3 mb-3" style={{ background: "#E7F5EC", color: "#1E7B3A", fontSize: 12.5 }}>
-            <CheckCircle2 size={15} /> Établissement ajouté — vous pouvez en saisir un autre.
-          </div>
-        )}
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Nom *</label>
+        <input className="form-control" style={{ fontSize: 13, borderColor: errors.nom ? "#B3261E" : BORDER }} value={form.nom} onChange={update("nom")} placeholder="Ministère de..." />
+        {errors.nom && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.nom}</p>}
 
-        <div className="row g-2">
-          <div className="col-8">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Nom de l'établissement *</label>
-            <input
-              className="form-control"
-              style={{ fontSize: 13, borderColor: errors.nom ? "#B3261E" : BORDER }}
-              placeholder="Ministère de l'Éducation"
-              value={form.nom}
-              onChange={update("nom")}
-            />
-            {errors.nom && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.nom}</p>}
-          </div>
-          <div className="col-4">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Identifiant *</label>
-            <input
-              className="form-control"
-              style={{ fontSize: 13, borderColor: errors.identifiant_unique ? "#B3261E" : BORDER }}
-              value={form.identifiant_unique}
-              onChange={update("identifiant_unique")}
-            />
-            {errors.identifiant_unique && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.identifiant_unique}</p>}
-          </div>
-        </div>
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Identifiant unique *</label>
+        <input className="form-control" style={{ fontSize: 13, borderColor: errors.identifiant_unique ? "#B3261E" : BORDER }} value={form.identifiant_unique} onChange={update("identifiant_unique")} placeholder="MIN-SANTE-001" />
+        {errors.identifiant_unique && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.identifiant_unique}</p>}
 
-        <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Adresse</label>
-        <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.adresse} onChange={update("adresse")} />
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Adresse</label>
+        <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.adresse || ""} onChange={update("adresse")} />
 
         <div className="row g-2">
           <div className="col-6">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Gouvernorat</label>
-            <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={form.gouvernorat} onChange={update("gouvernorat")}>
-              {GOUVERNORATS.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Gouvernorat</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.gouvernorat || ""} onChange={update("gouvernorat")} />
           </div>
           <div className="col-6">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Responsable parc auto</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.responsable_parc_auto} onChange={update("responsable_parc_auto")} />
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Responsable parc auto</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.responsable_parc_auto || ""} onChange={update("responsable_parc_auto")} />
           </div>
         </div>
 
         <div className="row g-2">
           <div className="col-4">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Téléphone</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.telephone} onChange={update("telephone")} />
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Téléphone</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.telephone || ""} onChange={update("telephone")} />
           </div>
           <div className="col-4">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Mobile</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.mobile} onChange={update("mobile")} />
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Mobile</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.mobile || ""} onChange={update("mobile")} />
           </div>
           <div className="col-4">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Email</label>
-            <input className="form-control" type="email" style={{ fontSize: 13, borderColor: BORDER }} value={form.email} onChange={update("email")} />
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Email</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.email || ""} onChange={update("email")} />
           </div>
         </div>
+
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Statut GIAS PROD</label>
+        <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.statut_gias_prod || ""} onChange={update("statut_gias_prod")} placeholder="ex: injection PROD lot 5" />
 
         <div className="d-flex gap-2 mt-4">
-          <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>
-            Annuler
-          </button>
-          <button
-            className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2"
-            style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }}
-            onClick={handleSubmit}
-            disabled={submitting}
-          >
+          <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
+          <button className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2" style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }} onClick={handleSubmit} disabled={submitting}>
             {submitting && <Loader2 size={14} className="spin" />}
-            {mode === "edit" ? "Enregistrer" : "Ajouter"}
+            {mode === "edit" ? "Enregistrer" : "Créer"}
           </button>
         </div>
       </div>
@@ -188,76 +132,50 @@ function EtablissementModal({ mode = "create", initialData, onClose, onSubmit, s
   );
 }
 
-// Modale dédiée à l'affectation / modification du numéro de contrat (N° Police),
-// séparée du formulaire établissement car elle correspond à un endpoint distinct
-// (PUT /etablissements/:id/contrat).
-function ContratModal({ etablissement, onClose, onSubmit, submitting }) {
-  const [form, setForm] = useState({
-    numero_police: etablissement.numero_police || "",
-    validite_du: etablissement.validite_du || "",
-    validite_au: etablissement.validite_au || "",
-  });
+function FusionModal({ etablissements, onClose, onSubmit, submitting }) {
+  const [sourceId, setSourceId] = useState("");
+  const [cibleId, setCibleId] = useState("");
   const [error, setError] = useState("");
 
-  const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
-
   const handleSubmit = () => {
-    if (!form.numero_police.trim()) {
-      setError("Champ requis");
-      return;
-    }
+    if (!sourceId || !cibleId) return setError("Sélectionne les deux établissements");
+    if (sourceId === cibleId) return setError("Choisis deux établissements différents");
     setError("");
-    onSubmit(form);
+    onSubmit(sourceId, cibleId);
   };
 
   return (
     <div
       className="d-flex align-items-center justify-content-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 50 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 60 }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-4 p-4" style={{ width: 400, maxWidth: "92vw" }}>
-        <div className="d-flex align-items-center justify-content-between mb-1">
-          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Affecter un contrat</p>
-          <button className="btn btn-sm border-0 p-1" onClick={onClose}>
-            <X size={18} color={MUTED} />
-          </button>
+      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 400, maxWidth: "92vw" }}>
+        <div className="d-flex align-items-center justify-content-between mb-3">
+          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Fusionner deux établissements</p>
+          <button className="btn btn-sm border-0 p-1" onClick={onClose}><X size={18} color={MUTED} /></button>
         </div>
-        <p className="mb-0" style={{ fontSize: 12.5, color: MUTED }}>{etablissement.nom}</p>
 
-        <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "14px 0 4px" }}>N° Police *</label>
-        <input
-          className="form-control"
-          style={{ fontSize: 13, fontFamily: "monospace", borderColor: error ? "#B3261E" : BORDER }}
-          placeholder="2026301002966"
-          value={form.numero_police}
-          onChange={update("numero_police")}
-        />
-        {error && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{error}</p>}
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Source (sera supprimée)</label>
+        <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
+          <option value="">Sélectionner...</option>
+          {etablissements.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+        </select>
 
-        <div className="row g-2">
-          <div className="col-6">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Validité du</label>
-            <input className="form-control" type="date" style={{ fontSize: 13, borderColor: BORDER }} value={form.validite_du} onChange={update("validite_du")} />
-          </div>
-          <div className="col-6">
-            <label style={{ fontSize: 12, color: MUTED, display: "block", margin: "10px 0 4px" }}>Validité au</label>
-            <input className="form-control" type="date" style={{ fontSize: 13, borderColor: BORDER }} value={form.validite_au} onChange={update("validite_au")} />
-          </div>
-        </div>
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Cible (conservée)</label>
+        <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={cibleId} onChange={(e) => setCibleId(e.target.value)}>
+          <option value="">Sélectionner...</option>
+          {etablissements.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
+        </select>
+
+        <p style={{ fontSize: 11.5, color: MUTED, margin: "10px 0 0" }}>Tous les contrats et véhicules de la source seront transférés vers la cible. Action irréversible.</p>
+        {error && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "6px 0 0" }}>{error}</p>}
 
         <div className="d-flex gap-2 mt-4">
-          <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>
-            Annuler
-          </button>
-          <button
-            className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2"
-            style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }}
-            onClick={handleSubmit}
-            disabled={submitting}
-          >
+          <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
+          <button className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2" style={{ fontSize: 13, backgroundColor: "#B3261E", borderColor: "#B3261E" }} onClick={handleSubmit} disabled={submitting}>
             {submitting && <Loader2 size={14} className="spin" />}
-            Enregistrer
+            Confirmer la fusion
           </button>
         </div>
       </div>
@@ -265,167 +183,371 @@ function ContratModal({ etablissement, onClose, onSubmit, submitting }) {
   );
 }
 
-// Petite barre de répartition (sans lib de chart externe — juste du CSS)
-// pour rester léger : usage, marque, etc.
-function BarList({ data, color = "#0B1F38" }) {
-  const max = Math.max(...data.map((d) => d.count), 1);
+function NewContratModal({ onClose, onSubmit, submitting }) {
+  const [numeroPolice, setNumeroPolice] = useState("");
+  const [error, setError] = useState("");
+  const annee = new Date().getFullYear();
+
+  const handleSubmit = () => {
+    if (!numeroPolice.trim()) return setError("Champ requis");
+    onSubmit({ numero_police: numeroPolice });
+  };
+
   return (
-    <div className="d-flex flex-column gap-2">
-      {data.map((d) => (
-        <div key={d.label} className="d-flex align-items-center gap-2">
-          <span style={{ fontSize: 12, color: "#161B22", width: 130, flexShrink: 0 }} className="text-truncate" title={d.label}>
-            {d.label}
-          </span>
-          <div className="flex-grow-1 rounded-pill" style={{ backgroundColor: "#F1F2F4", height: 8, overflow: "hidden" }}>
-            <div
-              className="rounded-pill"
-              style={{ height: "100%", width: `${(d.count / max) * 100}%`, backgroundColor: color, transition: "width 0.4s ease" }}
-            />
-          </div>
-          <span style={{ fontSize: 12, color: MUTED, width: 34, textAlign: "right", flexShrink: 0 }}>{d.count}</span>
+    <div className="d-flex align-items-center justify-content-center" style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.4)", zIndex: 70 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 360, maxWidth: "92vw" }}>
+        <div className="d-flex align-items-center justify-content-between mb-3">
+          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Nouveau contrat</p>
+          <button className="btn btn-sm border-0 p-1" onClick={onClose}><X size={18} color={MUTED} /></button>
         </div>
-      ))}
+
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "6px 0 4px" }}>N° police *</label>
+        <input className="form-control" style={{ fontSize: 13, borderColor: error ? "#B3261E" : BORDER }} value={numeroPolice} onChange={(e) => { setNumeroPolice(e.target.value); setError(""); }} placeholder="POL-2026-013" />
+        {error && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{error}</p>}
+
+        <div className="d-flex justify-content-between p-2 rounded-3 mt-3" style={{ backgroundColor: "#F3F5F8", fontSize: 12.5 }}>
+          <span style={{ color: MUTED }}>Période calculée automatiquement</span>
+          <b style={{ color: NAVY }}>01/01/{annee} → 31/12/{annee}</b>
+        </div>
+
+        <div className="d-flex gap-2 mt-4">
+          <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
+          <button className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2" style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }} onClick={handleSubmit} disabled={submitting}>
+            {submitting && <Loader2 size={14} className="spin" />}
+            Créer le contrat
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function groupCount(list, field, topN = 5) {
-  const counts = {};
-  for (const item of list) {
-    const key = (item[field] || "").toString().trim() || "Non renseigné";
-    counts[key] = (counts[key] || 0) + 1;
-  }
-  return Object.entries(counts)
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, topN);
-}
+function QuickViewModal({ etablissement, onClose, onOpenContrat }) {
+  const [contrats, setContrats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showNewContrat, setShowNewContrat] = useState(false);
+  const [submittingContrat, setSubmittingContrat] = useState(false);
 
-// Popup de statistiques : chargée à la demande quand on clique sur une ligne.
-// Le lien "Voir la liste des véhicules" est volontairement non câblé pour l'instant.
-function EtablissementStatsModal({ etablissement, onClose }) {
-  const [vehicules, setVehicules] = useState(null);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setVehicules(null);
-    setError(null);
-    vehiculesApi
+  const loadContrats = () => {
+    setLoading(true);
+    contratsApi
       .getByEtablissement(etablissement.id)
-      .then((data) => !cancelled && setVehicules(data))
-      .catch((err) => !cancelled && setError(err.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [etablissement.id]);
+      .then((data) => setContrats(data))
+      .catch(() => setContrats([]))
+      .finally(() => setLoading(false));
+  };
 
-  const loading = vehicules === null && !error;
-  const total = vehicules?.length || 0;
-  const parUsage = useMemo(() => (vehicules ? groupCount(vehicules, "usage") : []), [vehicules]);
-  const parMarque = useMemo(() => (vehicules ? groupCount(vehicules, "marque") : []), [vehicules]);
+  useEffect(() => { loadContrats(); }, [etablissement.id]);
+
+  const nbContrats = contrats?.length ?? 0;
+
+  const handleCreateContrat = async (form) => {
+    setSubmittingContrat(true);
+    try {
+      await contratsApi.create(etablissement.id, form);
+      setShowNewContrat(false);
+      loadContrats();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSubmittingContrat(false);
+    }
+  };
 
   return (
     <div
       className="d-flex align-items-center justify-content-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 50 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.4)", zIndex: 60, backdropFilter: "blur(2px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-4 p-4" style={{ width: 480, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto" }}>
-        <div className="d-flex align-items-start justify-content-between mb-1">
+      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 440, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto", boxShadow: "0 25px 60px rgba(11,31,56,0.25)" }}>
+        <div className="d-flex align-items-center justify-content-between mb-3">
           <div className="d-flex align-items-center gap-2">
-            <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 34, height: 34, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
-              <Building2 size={15} color={NAVY} />
+            <span className="d-flex align-items-center justify-content-center rounded-4" style={{ width: 40, height: 40, backgroundColor: "#EEF2F7" }}>
+              <Building2 size={18} color={NAVY} />
             </span>
             <div>
-              <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>{etablissement.nom}</p>
-              <p className="mb-0" style={{ fontSize: 11.5, color: MUTED, fontFamily: "monospace" }}>{etablissement.identifiant_unique || "—"}</p>
+              <p className="mb-0 fw-semibold" style={{ fontSize: 15.5 }}>{etablissement.nom}</p>
+              <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>{etablissement.identifiant_unique}</p>
             </div>
           </div>
-          <button className="btn btn-sm border-0 p-1" onClick={onClose}>
+          <button className="btn btn-sm border-0 p-1" style={{ backgroundColor: "#F1F2F4", borderRadius: 8 }} onClick={onClose}><X size={16} color={MUTED} /></button>
+        </div>
+
+        <div className="rounded-3 p-2 mb-3" style={{ backgroundColor: "#F8FAFC", border: `1px solid ${BORDER}` }}>
+          <div className="row g-2" style={{ fontSize: 12 }}>
+            <div className="col-6 d-flex align-items-center gap-2">
+              <span className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 20, height: 20, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
+                <User size={10} color={NAVY} />
+              </span>
+              <span style={{ fontSize: 11.5 }}>{etablissement.responsable_parc_auto || "—"}</span>
+            </div>
+            <div className="col-6 d-flex align-items-center gap-2">
+              <span className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 20, height: 20, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
+                <Phone size={10} color={NAVY} />
+              </span>
+              <span style={{ fontSize: 11.5 }}>{etablissement.telephone || etablissement.mobile || "—"}</span>
+            </div>
+            <div className="col-12 d-flex align-items-center gap-2">
+              <span className="d-flex align-items-center justify-content-center rounded-circle" style={{ width: 20, height: 20, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
+                <Mail size={10} color={NAVY} />
+              </span>
+              <span style={{ fontSize: 11.5 }}>{etablissement.email || "—"}</span>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="d-flex align-items-center justify-content-center py-3" style={{ color: MUTED, fontSize: 13 }}>
+            <Loader2 size={16} className="spin me-2" /> Chargement des contrats...
+          </div>
+        ) : (
+          <>
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <div>
+                <p className="mb-0 fw-semibold" style={{ fontSize: 14, color: "#161B22" }}>Contrats ({nbContrats})</p>
+              </div>
+              <button
+                className="btn d-flex align-items-center gap-2 border-0"
+                style={{ fontSize: 12, fontWeight: 600, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8, padding: "7px 13px", boxShadow: "0 2px 6px rgba(43,108,176,0.15)" }}
+                onClick={() => setShowNewContrat(true)}
+              >
+                <Plus size={13} /> Nouveau contrat
+              </button>
+            </div>
+            {nbContrats === 0 ? (
+              <div className="text-center py-4 rounded-3" style={{ backgroundColor: "#F8FAFC", border: "1px dashed " + BORDER, fontSize: 13, color: MUTED }}>
+                <p className="mb-0">Aucun contrat affecté pour l'instant</p>
+                <p className="mb-0" style={{ fontSize: 12, marginTop: 4 }}>Cliquez sur "Nouveau contrat" pour commencer</p>
+              </div>
+            ) : (
+              <div className="d-flex flex-column gap-2">
+                {contrats.map((c) => (
+                  <button
+                    key={c.id}
+                    className="d-flex align-items-center justify-content-between rounded-3 px-3 py-2 border-0 w-100 text-start"
+                    style={{ 
+                      backgroundColor: "#fff", 
+                      border: "1px solid " + BORDER,
+                      boxShadow: "0 1px 3px rgba(11,31,56,0.05)",
+                      transition: "all 0.2s ease" 
+                    }}
+                    onClick={() => onOpenContrat(etablissement, c)}
+                    onMouseEnter={(ev) => {
+                      ev.currentTarget.style.backgroundColor = "#F8FAFC";
+                      ev.currentTarget.style.borderColor = "#2B6CB0";
+                      ev.currentTarget.style.transform = "translateY(-1px)";
+                      ev.currentTarget.style.boxShadow = "0 4px 12px rgba(11,31,56,0.1)";
+                    }}
+                    onMouseLeave={(ev) => {
+                      ev.currentTarget.style.backgroundColor = "#fff";
+                      ev.currentTarget.style.borderColor = BORDER;
+                      ev.currentTarget.style.transform = "translateY(0)";
+                      ev.currentTarget.style.boxShadow = "0 1px 3px rgba(11,31,56,0.05)";
+                    }}
+                  >
+                    <div className="d-flex align-items-center gap-2">
+                      <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 32, height: 32, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
+                        <FileText size={14} color={NAVY} />
+                      </span>
+                      <span style={{ fontSize: 12.5, fontFamily: "monospace", fontWeight: 600, color: "#161B22" }}>{c.numero_police}</span>
+                    </div>
+                    <ChevronRight size={16} color={MUTED} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {showNewContrat && (
+        <NewContratModal onClose={() => setShowNewContrat(false)} onSubmit={handleCreateContrat} submitting={submittingContrat} />
+      )}
+
+      <style>{`
+        .spin { animation: spin 0.8s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .modal-pop { animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes modalPop {
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .form-control, .form-select {
+          border-radius: 10px !important;
+          transition: box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+        .form-control:focus, .form-select:focus {
+          box-shadow: 0 0 0 3px rgba(11,31,56,0.10);
+          outline: none;
+        }
+        .form-control::placeholder { color: #A9B2BE; }
+
+        .btn { transition: transform 0.12s ease, box-shadow 0.18s ease, filter 0.15s ease; }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(0.98); }
+        .btn:active:not(:disabled) { transform: translateY(0); }
+        .btn:disabled { opacity: 0.65; cursor: not-allowed; }
+      `}</style>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------
+// Import en masse — dry-run (aperçu + erreurs) puis confirmation.
+// N'utilise ni "code couleur" (fiabilisation) ni "Statut - GIAS PROD",
+// même si ces colonnes sont présentes dans le fichier source.
+// ---------------------------------------------------------------
+function ImportEtablissementsModal({ onClose, onImported }) {
+  const fileRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [step, setStep] = useState("upload"); // "upload" | "checking" | "preview" | "committing" | "done"
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState(null);
+
+  const resetFile = () => {
+    setFile(null);
+    setSummary(null);
+    setError(null);
+    setStep("upload");
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const handleFileChange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+    setError(null);
+    setStep("checking");
+    try {
+      const result = await importApi.dryRunEtablissements(f);
+      setSummary(result);
+      setStep("preview");
+    } catch (err) {
+      setError(err.message);
+      setStep("upload");
+    }
+  };
+
+  const handleConfirm = async () => {
+    setStep("committing");
+    setError(null);
+    try {
+      const result = await importApi.commitEtablissements(file);
+      setSummary(result);
+      setStep("done");
+      onImported?.();
+    } catch (err) {
+      setError(err.message);
+      setStep("preview");
+    }
+  };
+
+  return (
+    <div
+      className="d-flex align-items-center justify-content-center"
+      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 60 }}
+      onClick={(e) => e.target === e.currentTarget && step !== "committing" && onClose()}
+    >
+      <div className="bg-white rounded-4 p-4" style={{ width: 480, maxWidth: "92vw", maxHeight: "88vh", overflowY: "auto" }}>
+        <div className="d-flex align-items-center justify-content-between mb-1">
+          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Import en masse — Établissements</p>
+          <button className="btn btn-sm border-0 p-1" onClick={onClose} disabled={step === "committing"}>
             <X size={18} color={MUTED} />
           </button>
         </div>
-
-        {/* Infos rapides établissement */}
-        <div className="d-flex gap-2 mt-3 flex-wrap">
-          <span style={{ fontSize: 11.5, padding: "3px 10px", borderRadius: 20, backgroundColor: "#F1F2F4", color: "#161B22" }}>
-            {etablissement.gouvernorat || "Gouvernorat —"}
-          </span>
-          <span
-            style={{
-              fontSize: 11.5,
-              padding: "3px 10px",
-              borderRadius: 20,
-              backgroundColor: etablissement.numero_police ? "#E7F5EC" : "#FDF1DE",
-              color: etablissement.numero_police ? "#1E7B3A" : "#A15C00",
-              fontFamily: etablissement.numero_police ? "monospace" : "inherit",
-            }}
-          >
-            {etablissement.numero_police || "Non affecté"}
-          </span>
-        </div>
+        <p style={{ fontSize: 11.5, color: MUTED, margin: "0 0 14px" }}>
+          Colonnes utilisées : N. Police (optionnel), Etablissement, ADRESSE, GOUVERNORAT, IDENTIFIANT UNIQUE, TEL, Resp parc auto, MOBILE, E-MAIL.
+          "code couleur" et "Statut - GIAS PROD" ne sont pas importés même si présents.
+        </p>
 
         {error && (
-          <div className="d-flex align-items-center gap-2 p-2 rounded-3 mt-3" style={{ background: "#FBE7E7", color: "#B3261E", fontSize: 12.5 }}>
+          <div className="d-flex align-items-center gap-2 p-2 rounded-3 mb-3" style={{ background: "#FBE7E7", color: "#B3261E", fontSize: 12.5 }}>
             <AlertCircle size={15} /> {error}
           </div>
         )}
 
-        {loading ? (
-          <div className="d-flex align-items-center justify-content-center py-5" style={{ color: MUTED, fontSize: 13 }}>
-            <Loader2 size={18} className="spin me-2" /> Chargement des statistiques...
+        {step === "upload" && (
+          <label
+            className="d-flex flex-column align-items-center justify-content-center gap-2 rounded-4"
+            style={{ border: `2px dashed ${BORDER}`, backgroundColor: "#FAFBFC", padding: "36px 20px", cursor: "pointer" }}
+          >
+            <Upload size={24} color={MUTED} />
+            <p className="mb-0" style={{ fontSize: 13, fontWeight: 500, color: "#161B22" }}>Clique pour choisir un fichier .xlsx</p>
+            <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>Rien n'est importé avant confirmation</p>
+            <input ref={fileRef} type="file" accept=".xlsx" className="d-none" onChange={handleFileChange} />
+          </label>
+        )}
+
+        {step === "checking" && (
+          <div className="d-flex flex-column align-items-center justify-content-center gap-2" style={{ padding: "36px 20px" }}>
+            <Loader2 size={22} className="spin" color={NAVY} />
+            <p className="mb-0" style={{ fontSize: 12.5, color: MUTED }}>Analyse du fichier...</p>
           </div>
-        ) : !error && (
+        )}
+
+        {(step === "preview" || step === "committing" || step === "done") && summary && (
           <>
-            {/* Total véhicules, mis en avant */}
-            <div className="d-flex align-items-center gap-3 rounded-4 p-3 mt-3" style={{ backgroundColor: "#F8F9FB", border: `1px solid ${BORDER}` }}>
-              <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 42, height: 42, backgroundColor: NAVY, flexShrink: 0 }}>
-                <Car size={19} color="#fff" />
-              </span>
-              <div>
-                <p className="mb-0 fw-bold" style={{ fontSize: 22, lineHeight: 1, color: "#161B22" }}>{total}</p>
-                <p className="mb-0" style={{ fontSize: 12, color: MUTED }}>véhicule{total > 1 ? "s" : ""} assuré{total > 1 ? "s" : ""}</p>
+            <div className="d-flex align-items-center gap-2 mb-3">
+              <FileSpreadsheet size={16} color={NAVY} />
+              <span style={{ fontSize: 12.5, fontWeight: 500 }}>{file?.name}</span>
+            </div>
+
+            <div className="row g-2 mb-3">
+              <div className="col-4">
+                <div className="rounded-3 p-2 text-center" style={{ backgroundColor: "#FAFBFC", border: `1px solid ${BORDER}` }}>
+                  <p className="mb-0 fw-bold" style={{ fontSize: 19 }}>{summary.total}</p>
+                  <p className="mb-0" style={{ fontSize: 10.5, color: MUTED }}>lignes</p>
+                </div>
+              </div>
+              <div className="col-4">
+                <div className="rounded-3 p-2 text-center" style={{ backgroundColor: "#E7F5EC", border: "1px solid #CBEAD6" }}>
+                  <p className="mb-0 fw-bold" style={{ fontSize: 19, color: "#1E7B3A" }}>{summary.valides}</p>
+                  <p className="mb-0" style={{ fontSize: 10.5, color: "#1E7B3A" }}>valides</p>
+                </div>
+              </div>
+              <div className="col-4">
+                <div className="rounded-3 p-2 text-center" style={{ backgroundColor: summary.erreurs ? "#FBE7E7" : "#FAFBFC", border: `1px solid ${summary.erreurs ? "#F0C9C9" : BORDER}` }}>
+                  <p className="mb-0 fw-bold" style={{ fontSize: 19, color: summary.erreurs ? "#B3261E" : "#161B22" }}>{summary.erreurs}</p>
+                  <p className="mb-0" style={{ fontSize: 10.5, color: summary.erreurs ? "#B3261E" : MUTED }}>erreurs</p>
+                </div>
               </div>
             </div>
 
-            {total === 0 ? (
-              <p className="text-center mt-4" style={{ fontSize: 12.5, color: MUTED }}>
-                Aucun véhicule enregistré pour cet établissement.
-              </p>
-            ) : (
-              <>
-                {parUsage.length > 1 && (
-                  <div className="mt-4">
-                    <div className="d-flex align-items-center gap-1 mb-2">
-                      <BarChart3 size={13} color={MUTED} />
-                      <p className="mb-0" style={{ fontSize: 12, fontWeight: 500, color: MUTED }}>Répartition par usage</p>
-                    </div>
-                    <BarList data={parUsage} color={NAVY} />
+            {summary.detailErreurs?.length > 0 && (
+              <div className="rounded-3 mb-3" style={{ border: `1px solid ${BORDER}`, maxHeight: 180, overflowY: "auto" }}>
+                {summary.detailErreurs.map((e, i) => (
+                  <div key={i} className="px-3 py-2" style={{ borderBottom: `1px solid ${BORDER}`, fontSize: 11.5 }}>
+                    <span style={{ fontWeight: 600, color: "#B3261E" }}>Ligne {e.ligne}</span>
+                    <span style={{ color: MUTED }}> — {e.messages.join(", ")}</span>
                   </div>
-                )}
-
-                {parMarque.length > 1 && (
-                  <div className="mt-4">
-                    <div className="d-flex align-items-center gap-1 mb-2">
-                      <BarChart3 size={13} color={MUTED} />
-                      <p className="mb-0" style={{ fontSize: 12, fontWeight: 500, color: MUTED }}>Top marques</p>
-                    </div>
-                    <BarList data={parMarque} color="#0D6EFD" />
-                  </div>
-                )}
-              </>
+                ))}
+              </div>
             )}
 
-            {/* Lien vers la liste filtrée des véhicules — non câblé pour le moment */}
-            <button
-              className="btn w-100 d-flex align-items-center justify-content-center gap-2 mt-4"
-              style={{ fontSize: 13, borderColor: BORDER, color: NAVY }}
-              disabled
-              title="Navigation à venir"
-            >
-              Voir la liste des véhicules <ArrowUpRight size={14} />
-            </button>
+            {step === "done" ? (
+              <div className="d-flex align-items-center gap-2 p-2 rounded-3" style={{ background: "#E7F5EC", color: "#1E7B3A", fontSize: 12.5 }}>
+                <CheckCircle2 size={15} />
+                {summary.inseres} établissement{summary.inseres > 1 ? "s" : ""} importé{summary.inseres > 1 ? "s" : ""}
+                {summary.contratsRattaches ? ` · ${summary.contratsRattaches} contrat${summary.contratsRattaches > 1 ? "s" : ""} rattaché${summary.contratsRattaches > 1 ? "s" : ""}` : ""}.
+              </div>
+            ) : (
+              <div className="d-flex gap-2">
+                <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={resetFile} disabled={step === "committing"}>
+                  Annuler
+                </button>
+                <button
+                  className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2"
+                  style={{ fontSize: 13, backgroundColor: summary.valides === 0 ? "#B8BEC7" : NAVY, borderColor: summary.valides === 0 ? "#B8BEC7" : NAVY }}
+                  onClick={handleConfirm}
+                  disabled={step === "committing" || summary.valides === 0}
+                >
+                  {step === "committing" && <Loader2 size={14} className="spin" />}
+                  Importer {summary.valides} établissement{summary.valides > 1 ? "s" : ""}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -433,27 +555,32 @@ function EtablissementStatsModal({ etablissement, onClose }) {
   );
 }
 
-export default function EtablissementsPage() {
+export default function EtablissementsPage({ onOpenContrat, reopenEtablissement, onReopenConsumed }) {
   const [etablissements, setEtablissements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
-  const [contratFilter, setContratFilter] = useState("tous");
 
-  // Un state pilote chaque modale : null = fermée
-  const [modalMode, setModalMode] = useState(null); // "create" | "edit" | null
-  const [editingEtablissement, setEditingEtablissement] = useState(null);
-  const [contratTarget, setContratTarget] = useState(null); // étab en cours d'affectation de contrat
-  const [statsTarget, setStatsTarget] = useState(null); // étab dont on consulte les statistiques
+  const [etabModalMode, setEtabModalMode] = useState(null);
+  const [editingEtab, setEditingEtab] = useState(null);
+  // Si on revient de ContratPage, rouvre directement le popup de l'établissement
+  // d'origine — la valeur initiale suffit car ce composant est remonté à chaque retour.
+  const [quickView, setQuickView] = useState(reopenEtablissement || null);
+
+  useEffect(() => {
+    if (reopenEtablissement) onReopenConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [showFusion, setShowFusion] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [justCreated, setJustCreated] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await etablissementsApi.getAll();
-      setEtablissements(data);
+      setEtablissements(await etablissementsApi.getAll());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -461,53 +588,36 @@ export default function EtablissementsPage() {
     }
   };
 
+  useEffect(() => { loadData(); }, []);
+
   useEffect(() => {
-    loadData();
-  }, []);
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const filtered = useMemo(() => {
-    let list = etablissements;
-    if (contratFilter === "avec") list = list.filter((e) => e.numero_police);
-    if (contratFilter === "sans") list = list.filter((e) => !e.numero_police);
-    if (!search.trim()) return list;
     const q = search.toLowerCase();
-    return list.filter(
-      (e) =>
-        (e.nom || "").toLowerCase().includes(q) ||
-        (e.identifiant_unique || "").toLowerCase().includes(q) ||
-        (e.numero_police || "").toLowerCase().includes(q) ||
-        (e.gouvernorat || "").toLowerCase().includes(q)
-    );
-  }, [etablissements, search, contratFilter]);
+    return etablissements.filter((e) => {
+      return !q || e.nom.toLowerCase().includes(q) || (e.identifiant_unique || "").toLowerCase().includes(q) || (e.gouvernorat || "").toLowerCase().includes(q);
+    });
+  }, [etablissements, search]);
 
-  const openCreate = () => {
-    setEditingEtablissement(null);
-    setJustCreated(false);
-    setModalMode("create");
-  };
+  const openCreate = () => { setEditingEtab(null); setEtabModalMode("create"); };
+  const openEdit = (e) => { setEditingEtab(e); setEtabModalMode("edit"); };
+  const closeEtabModal = () => { setEtabModalMode(null); setEditingEtab(null); };
 
-  const openEdit = (e) => {
-    setEditingEtablissement(e);
-    setJustCreated(false);
-    setModalMode("edit");
-  };
-
-  const closeModal = () => {
-    setModalMode(null);
-    setEditingEtablissement(null);
-    setJustCreated(false);
-  };
-
-  const handleSubmitModal = async (form) => {
+  const handleSubmitEtab = async (form) => {
     setSubmitting(true);
     try {
-      if (modalMode === "edit") {
-        await etablissementsApi.update(editingEtablissement.id, form);
-        closeModal();
+      if (etabModalMode === "edit") {
+        await etablissementsApi.update(editingEtab.id, form);
+        setToast("Établissement mis à jour");
       } else {
         await etablissementsApi.create(form);
-        setJustCreated(true); // reste ouverte : reset du formulaire + bandeau de succès
+        setToast("Établissement créé");
       }
+      closeEtabModal();
       loadData();
     } catch (err) {
       alert(err.message);
@@ -516,11 +626,12 @@ export default function EtablissementsPage() {
     }
   };
 
-  const handleSubmitContrat = async (form) => {
+  const handleFusion = async (sourceId, cibleId) => {
     setSubmitting(true);
     try {
-      await etablissementsApi.affecterContrat(contratTarget.id, form);
-      setContratTarget(null);
+      await etablissementsApi.fusionner(sourceId, cibleId);
+      setToast("Fusion effectuée");
+      setShowFusion(false);
       loadData();
     } catch (err) {
       alert(err.message);
@@ -528,77 +639,45 @@ export default function EtablissementsPage() {
       setSubmitting(false);
     }
   };
-
-  const nbAvecContrat = etablissements.filter((e) => e.numero_police).length;
 
   return (
     <div>
       <div className="d-flex align-items-center justify-content-between mb-4">
         <div>
           <p className="mb-0 fw-semibold" style={{ fontSize: 18, color: "#161B22" }}>Établissements</p>
-          <p className="mb-0" style={{ fontSize: 13, color: MUTED }}>
-            Établissements publics et contrats d'assurance véhicules
-          </p>
+          <p className="mb-0" style={{ fontSize: 13, color: MUTED }}>Établissements publics et leurs contrats</p>
         </div>
-        <button
-          className="btn d-flex align-items-center gap-2 text-white rounded-3"
-          style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }}
-          onClick={openCreate}
-        >
-          <Plus size={15} /> Ajouter un établissement
-        </button>
+        <div className="d-flex gap-2">
+          <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowFusion(true)}>
+            <GitMerge size={15} /> Fusionner
+          </button>
+          <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowImport(true)}>
+            <Upload size={15} /> Importer
+          </button>
+          <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY }} onClick={openCreate}>
+            <Plus size={15} /> Nouvel établissement
+          </button>
+        </div>
       </div>
 
-      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div className="d-flex align-items-center gap-2">
-          <div className="position-relative">
-            <Search size={14} color={MUTED} style={{ position: "absolute", left: 12, top: 11 }} />
-            <input
-              className="form-control rounded-3"
-              style={{ fontSize: 13, paddingLeft: 34, width: 280, borderColor: BORDER }}
-              placeholder="Rechercher un établissement..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <div className="d-flex align-items-center rounded-3 p-1" style={{ backgroundColor: "#F1F2F4" }}>
-            {[
-              { key: "tous", label: "Tous" },
-              { key: "avec", label: "Avec contrat" },
-              { key: "sans", label: "Sans contrat" },
-            ].map((opt) => (
-              <button
-                key={opt.key}
-                className="btn btn-sm border-0"
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 500,
-                  padding: "5px 14px",
-                  borderRadius: 8,
-                  backgroundColor: contratFilter === opt.key ? "#fff" : "transparent",
-                  color: contratFilter === opt.key ? NAVY : MUTED,
-                  boxShadow: contratFilter === opt.key ? "0 1px 3px rgba(11,31,56,0.12)" : "none",
-                }}
-                onClick={() => setContratFilter(opt.key)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+      {toast && (
+        <div className="d-flex align-items-center gap-2 p-2 rounded-3 mb-3" style={{ background: "#E7F5EC", color: "#1E7B3A", fontSize: 12.5, width: "fit-content" }}>
+          <CheckCircle2 size={15} /> {toast}
         </div>
+      )}
 
-        <span style={{ fontSize: 12.5, color: MUTED }}>
-          {loading ? "Chargement..." : `${filtered.length} établissement${filtered.length > 1 ? "s" : ""} · ${nbAvecContrat} avec contrat`}
-        </span>
+      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div className="position-relative">
+          <Search size={14} color={MUTED} style={{ position: "absolute", left: 12, top: 11 }} />
+          <input className="form-control rounded-3" style={{ fontSize: 13, paddingLeft: 34, width: 280, borderColor: BORDER }} placeholder="Rechercher un établissement..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <span style={{ fontSize: 12.5, color: MUTED }}>{loading ? "Chargement..." : `${filtered.length} établissement${filtered.length > 1 ? "s" : ""}`}</span>
       </div>
 
       {error && (
         <div className="d-flex align-items-center gap-2 p-3 rounded-3 mb-3" style={{ background: "#FBE7E7", color: "#B3261E", fontSize: 13 }}>
           <AlertCircle size={16} /> {error}
-          <button className="btn btn-sm ms-auto" style={{ fontSize: 12, color: "#B3261E", textDecoration: "underline" }} onClick={loadData}>
-            Réessayer
-          </button>
+          <button className="btn btn-sm ms-auto" style={{ fontSize: 12, color: "#B3261E", textDecoration: "underline" }} onClick={loadData}>Réessayer</button>
         </div>
       )}
 
@@ -608,17 +687,16 @@ export default function EtablissementsPage() {
             <Loader2 size={18} className="spin me-2" /> Chargement des établissements...
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-5 text-center" style={{ color: MUTED, fontSize: 13 }}>
-            Aucun établissement ne correspond à ces critères.
-          </div>
+          <div className="p-5 text-center" style={{ color: MUTED, fontSize: 13 }}>Aucun établissement ne correspond à ces critères.</div>
         ) : (
           <table className="w-100" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Établissement</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Gouvernorat</th>
+                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Responsable</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Contact</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>N° Contrat</th>
+                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Statut GIAS</th>
                 <th style={{ padding: "12px 16px" }}></th>
               </tr>
             </thead>
@@ -626,8 +704,8 @@ export default function EtablissementsPage() {
               {filtered.map((e) => (
                 <tr
                   key={e.id}
-                  style={{ borderBottom: `1px solid ${BORDER}`, cursor: "pointer" }}
-                  onClick={() => setStatsTarget(e)}
+                  style={{ borderBottom: `1px solid ${BORDER}`, cursor: "pointer", transition: "background-color 0.15s ease" }}
+                  onClick={() => setQuickView(e)}
                   onMouseEnter={(ev) => (ev.currentTarget.style.backgroundColor = "#FAFBFC")}
                   onMouseLeave={(ev) => (ev.currentTarget.style.backgroundColor = "transparent")}
                 >
@@ -638,37 +716,24 @@ export default function EtablissementsPage() {
                       </span>
                       <div>
                         <p className="mb-0 fw-medium" style={{ fontSize: 13 }}>{e.nom}</p>
-                        <p className="mb-0" style={{ fontSize: 11.5, color: MUTED, fontFamily: "monospace" }}>{e.identifiant_unique || "—"}</p>
+                        <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>{e.identifiant_unique}</p>
                       </div>
                     </div>
                   </td>
-                  <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>
-                    {e.gouvernorat || "—"}
+                  <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>{e.gouvernorat || "—"}</td>
+                  <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>{e.responsable_parc_auto || "—"}</td>
+                  <td style={{ padding: "12px 8px", fontSize: 12, color: MUTED }}>
+                    {e.telephone || e.mobile || e.email || "—"}
                   </td>
-                  <td style={{ padding: "12px 8px", fontSize: 12.5, color: MUTED }}>
-                    <p className="mb-0">{e.telephone || e.mobile || "—"}</p>
-                    <p className="mb-0" style={{ fontSize: 11.5 }}>{e.email || ""}</p>
-                  </td>
-                  <td style={{ padding: "12px 8px" }}>
-                    <ContratBadge etablissement={e} />
-                  </td>
-                  <td style={{ padding: "12px 16px" }} onClick={(ev) => ev.stopPropagation()}>
-                    <div className="d-flex align-items-center gap-2 justify-content-end">
-                      <button
-                        className="btn btn-sm d-flex align-items-center gap-1"
-                        style={{ fontSize: 12, backgroundColor: "#FFFFFF", color: "#0D6EFD", borderColor: "#0D6EFD" }}
-                        onClick={() => openEdit(e)}
-                      >
-                        <Pencil size={13} /> Modifier
-                      </button>
-                      <button
-                        className="btn btn-sm d-flex align-items-center gap-1"
-                        style={{ fontSize: 12, borderColor: BORDER, color: NAVY }}
-                        onClick={() => setContratTarget(e)}
-                      >
-                        <FileText size={13} /> {e.numero_police ? "Modifier contrat" : "Affecter n° contrat"}
-                      </button>
-                    </div>
+                  <td style={{ padding: "12px 8px", fontSize: 12, color: MUTED }}>{e.statut_gias_prod || "—"}</td>
+                  <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                    <button
+                      className="btn btn-sm d-flex align-items-center gap-1 border-0 ms-auto"
+                      style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
+                      onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
+                    >
+                      <Pencil size={13} /> Modifier
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -677,46 +742,50 @@ export default function EtablissementsPage() {
         )}
       </div>
 
-      {modalMode && (
-        <EtablissementModal
-          mode={modalMode}
-          initialData={
-            modalMode === "edit" && editingEtablissement
-              ? {
-                  nom: editingEtablissement.nom || "",
-                  identifiant_unique: editingEtablissement.identifiant_unique || "",
-                  adresse: editingEtablissement.adresse || "",
-                  gouvernorat: editingEtablissement.gouvernorat || GOUVERNORATS[0],
-                  responsable_parc_auto: editingEtablissement.responsable_parc_auto || "",
-                  telephone: editingEtablissement.telephone || "",
-                  mobile: editingEtablissement.mobile || "",
-                  email: editingEtablissement.email || "",
-                }
-              : null
-          }
-          onClose={closeModal}
-          onSubmit={handleSubmitModal}
-          submitting={submitting}
-          justCreated={justCreated}
+      {etabModalMode && (
+        <EtablissementModal mode={etabModalMode} initialData={etabModalMode === "edit" ? editingEtab : null} onClose={closeEtabModal} onSubmit={handleSubmitEtab} submitting={submitting} />
+      )}
+
+      {quickView && (
+        <QuickViewModal
+          etablissement={quickView}
+          onClose={() => setQuickView(null)}
+          onOpenContrat={(etab, contrat) => { onOpenContrat?.(etab, contrat); setQuickView(null); }}
         />
       )}
 
-      {contratTarget && (
-        <ContratModal
-          etablissement={contratTarget}
-          onClose={() => setContratTarget(null)}
-          onSubmit={handleSubmitContrat}
-          submitting={submitting}
-        />
+      {showFusion && (
+        <FusionModal etablissements={etablissements} onClose={() => setShowFusion(false)} onSubmit={handleFusion} submitting={submitting} />
       )}
 
-      {statsTarget && (
-        <EtablissementStatsModal etablissement={statsTarget} onClose={() => setStatsTarget(null)} />
+      {showImport && (
+        <ImportEtablissementsModal onClose={() => setShowImport(false)} onImported={loadData} />
       )}
 
       <style>{`
         .spin { animation: spin 0.8s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .modal-pop { animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes modalPop {
+          from { opacity: 0; transform: scale(0.96) translateY(8px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .form-control, .form-select {
+          border-radius: 10px !important;
+          transition: box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+        .form-control:focus, .form-select:focus {
+          box-shadow: 0 0 0 3px rgba(11,31,56,0.10);
+          outline: none;
+        }
+        .form-control::placeholder { color: #A9B2BE; }
+
+        .btn { transition: transform 0.12s ease, box-shadow 0.18s ease, filter 0.15s ease; }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(0.98); }
+        .btn:active:not(:disabled) { transform: translateY(0); }
+        .btn:disabled { opacity: 0.65; cursor: not-allowed; }
       `}</style>
     </div>
   );

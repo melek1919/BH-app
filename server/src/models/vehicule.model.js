@@ -2,7 +2,12 @@ import pool from '../config/database.js';
 
 const findAll = async () => {
     const { rows } = await pool.query(
-        "SELECT * FROM vehicule WHERE statut_retrait = 'actif' ORDER BY id"
+        `SELECT v.*, e.nom as etablissement_nom 
+         FROM vehicule v 
+         LEFT JOIN contrat c ON v.contrat_id = c.id 
+         LEFT JOIN etablissement e ON c.etablissement_id = e.id 
+         WHERE v.statut_retrait = 'actif' 
+         ORDER BY v.id`
     );
     return rows;
 };
@@ -14,30 +19,41 @@ const findById = async (id) => {
 
 const findRetires = async () => {
     const { rows } = await pool.query(
-        "SELECT * FROM vehicule WHERE statut_retrait = 'retire' ORDER BY date_retrait DESC"
+        `SELECT v.*, e.nom as etablissement_nom 
+         FROM vehicule v 
+         LEFT JOIN contrat c ON v.contrat_id = c.id 
+         LEFT JOIN etablissement e ON c.etablissement_id = e.id 
+         WHERE v.statut_retrait = 'retire' 
+         ORDER BY v.date_retrait DESC`
     );
     return rows;
 };
 
-const findByEtablissement = async (etablissementId) => {
+// ✅ remplace findByEtablissement : filtre maintenant sur contrat_id
+const findByContrat = async (contratId) => {
     const { rows } = await pool.query(
-        "SELECT * FROM vehicule WHERE etablissement_id = $1 AND statut_retrait = 'actif' ORDER BY id",
-        [etablissementId]
+        `SELECT v.*, e.nom as etablissement_nom 
+         FROM vehicule v 
+         LEFT JOIN contrat c ON v.contrat_id = c.id 
+         LEFT JOIN etablissement e ON c.etablissement_id = e.id 
+         WHERE v.contrat_id = $1 AND v.statut_retrait = 'actif' 
+         ORDER BY v.id`,
+        [contratId]
     );
     return rows;
 };
 
 const create = async (vehicule) => {
     const {
-        etablissement_id, immatriculation, usage, type_vehicule, numero_serie,
+        contrat_id, immatriculation, usage, type_vehicule, numero_serie,
         bonus_malus, marque, puissance, pvid, ptac, nb_places, dmc
-    } = vehicule; // <-- corrigé : "vehicule", pas "data"
+    } = vehicule;
 
     const { rows } = await pool.query(
         `INSERT INTO vehicule
-         (etablissement_id, immatriculation, usage, type_vehicule, numero_serie, bonus_malus, marque, puissance, pvid, ptac, nb_places, dmc)
+         (contrat_id, immatriculation, usage, type_vehicule, numero_serie, bonus_malus, marque, puissance, pvid, ptac, nb_places, dmc)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-        [etablissement_id, immatriculation, usage, type_vehicule, numero_serie, bonus_malus, marque, puissance, pvid, ptac, nb_places, dmc]
+        [contrat_id, immatriculation, usage, type_vehicule, numero_serie, bonus_malus, marque, puissance, pvid, ptac, nb_places, dmc]
     );
     return rows[0];
 };
@@ -81,4 +97,4 @@ const restaurer = async (id) => {
     return rows[0];
 };
 
-export default { findAll, findById, findRetires, findByEtablissement, create, update, retirer, restaurer };
+export default { findAll, findById, findRetires, findByContrat, create, update, retirer, restaurer };

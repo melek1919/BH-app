@@ -75,3 +75,44 @@ export const vehiculesApi = {
   retirer: (id) => request(`/vehicules/${id}/retirer`, { method: "PUT" }),
   restaurer: (id) => request(`/vehicules/${id}/restaurer`, { method: "PUT" }),
 };  
+
+
+
+// À ajouter dans src/services/api.js, à la suite de vehiculesApi.
+// Utilise fetch directement (pas le wrapper `request`) car il faut envoyer
+// du FormData, pas du JSON — pas de Content-Type manuel non plus, le
+// navigateur doit fixer lui-même le boundary du multipart.
+export const importApi = {
+  dryRunVehicules: async (file) => {
+    const formData = new FormData();
+    formData.append("fichier", file);
+    const res = await fetch(`${API_BASE}/import/vehicules/dry-run`, { method: "POST", body: formData });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
+    return body;
+  },
+  commitVehicules: async (file) => {
+    const formData = new FormData();
+    formData.append("fichier", file);
+    const res = await fetch(`${API_BASE}/import/vehicules/commit`, { method: "POST", body: formData });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
+    return body;
+  },
+  dryRunEtablissements: async (file) => {
+    const formData = new FormData();
+    formData.append("fichier", file);
+    const res = await fetch(`${API_BASE}/import/etablissements/dry-run`, { method: "POST", body: formData });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
+    return body;
+  },
+  commitEtablissements: async (file) => {
+    const formData = new FormData();
+    formData.append("fichier", file);
+    const res = await fetch(`${API_BASE}/import/etablissements/commit`, { method: "POST", body: formData });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
+    return body;
+  },
+};

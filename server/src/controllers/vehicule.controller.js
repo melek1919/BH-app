@@ -19,9 +19,16 @@ const getRetires = async (req, res, next) => {
     catch (err) { next(err); }
 };
 
-const getByEtablissement = async (req, res, next) => {
-    try { res.json(await model.findByEtablissement(req.params.etablissementId)); }
-    catch (err) { next(err); }
+// ✅ remplace getByEtablissement : un véhicule est rattaché à un contrat,
+// plus directement à un établissement.
+const getByContrat = async (req, res, next) => {
+    const contratId = Number(req.params.contratId);
+    if (!Number.isInteger(contratId)) {
+        return res.status(400).json({ message: 'Identifiant de contrat invalide' });
+    }
+    try {
+        res.json(await model.findByContrat(contratId));
+    } catch (err) { next(err); }
 };
 
 const create = async (req, res, next) => {
@@ -33,19 +40,19 @@ const create = async (req, res, next) => {
         const created = await model.create(value);
         res.status(201).json(created);
     } catch (err) {
-        if (err.code === '23503') return res.status(400).json({ message: 'Établissement inexistant' });
+        if (err.code === '23503') return res.status(400).json({ message: 'Contrat inexistant' });
         next(err);
     }
 };
 
 const update = async (req, res, next) => {
-    const { error, value } = vehiculeSchema.validate(req.body, { abortEarly: false }); // <-- corrigé
+    const { error, value } = vehiculeSchema.validate(req.body, { abortEarly: false });
     if (error) {
         return res.status(400).json({ message: 'données invalides', details: error.details.map((d) => d.message) });
     }
     try {
         const updated = await model.update(req.params.id, value);
-        if (!updated) return res.status(404).json({ message: 'vehicule introuvable' }); // <-- return ajouté
+        if (!updated) return res.status(404).json({ message: 'vehicule introuvable' });
         res.json(updated);
     } catch (err) { next(err); }
 };
@@ -66,4 +73,4 @@ const restaurer = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-export default { getAll, getOne, getRetires, getByEtablissement, create, update, retirer, restaurer };
+export default { getAll, getOne, getRetires, getByContrat, create, update, retirer, restaurer };
