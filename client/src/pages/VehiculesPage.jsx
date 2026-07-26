@@ -74,6 +74,8 @@ function VehiculeModal({ mode = "create", initialData, etablissements, onClose, 
     if (!form.etablissement_id) nextErrors.etablissement_id = "Champ requis";
     if (!form.immatriculation.trim()) nextErrors.immatriculation = "Champ requis";
     if (!form.nb_places) nextErrors.nb_places = "Champ requis";
+    else if (!/^[0-9]+$/.test(form.nb_places)) nextErrors.nb_places = "Doit être un nombre";
+    if (form.puissance && !/^[0-9]+$/.test(form.puissance)) nextErrors.puissance = "Doit être un nombre";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     onSubmit(form);
@@ -147,7 +149,8 @@ function VehiculeModal({ mode = "create", initialData, etablissements, onClose, 
           </div>
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Puissance</label>
-            <input className="form-control" type="number" style={{ fontSize: 13, borderColor: BORDER }} value={form.puissance} onChange={update("puissance")} />
+            <input className="form-control" type="number" style={{ fontSize: 13, borderColor: errors.puissance ? "#B3261E" : BORDER }} value={form.puissance} onChange={update("puissance")} />
+            {errors.puissance && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.puissance}</p>}
           </div>
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Places *</label>
@@ -345,6 +348,9 @@ export default function VehiculesPage() {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [statutFilter, setStatutFilter] = useState("actif");
+  const [etablissementFilter, setEtablissementFilter] = useState("");
+  const [usageFilter, setUsageFilter] = useState("");
+  const [marqueFilter, setMarqueFilter] = useState("");
 
   // Un seul state pilote la modale : null = fermée, "create" = ajout, "edit" = édition
   const [modalMode, setModalMode] = useState(null);
@@ -376,16 +382,18 @@ export default function VehiculesPage() {
   }, [statutFilter]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return vehicules;
     const q = search.toLowerCase();
     return vehicules.filter((v) => {
-      return (
+      const matchesSearch = !q || 
         (v.immatriculation || "").toLowerCase().includes(q) ||
         (v.marque || "").toLowerCase().includes(q) ||
-        (v.etablissement_nom || "").toLowerCase().includes(q)
-      );
+        (v.etablissement_nom || "").toLowerCase().includes(q);
+      const matchesEtablissement = !etablissementFilter || v.etablissement_id === Number(etablissementFilter);
+      const matchesUsage = !usageFilter || v.usage === usageFilter;
+      const matchesMarque = !marqueFilter || (v.marque || "").toLowerCase() === marqueFilter.toLowerCase();
+      return matchesSearch && matchesEtablissement && matchesUsage && matchesMarque;
     });
-  }, [vehicules, search]);
+  }, [vehicules, search, etablissementFilter, usageFilter, marqueFilter]);
 
   const buildPayload = (form) => ({
     etablissement_id: Number(form.etablissement_id),
@@ -475,8 +483,8 @@ export default function VehiculesPage() {
         </div>
       </div>
 
-      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div className="d-flex align-items-center gap-2">
+      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-3">
+        <div className="d-flex gap-2 flex-wrap">
           <div className="position-relative">
             <Search size={14} color={MUTED} style={{ position: "absolute", left: 12, top: 11 }} />
             <input
@@ -487,6 +495,22 @@ export default function VehiculesPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+
+         
+
+          <select
+            className="form-select rounded-3"
+            style={{ fontSize: 13, borderColor: BORDER, width: 140 }}
+            value={usageFilter}
+            onChange={(e) => setUsageFilter(e.target.value)}
+          >
+            <option value="">Usage</option>
+            {[...new Set(vehicules.map((v) => v.usage).filter(Boolean))].sort().map((u) => (
+              <option key={u} value={u}>{u}</option>
+            ))}
+          </select>
+
+        
 
           <div className="d-flex align-items-center rounded-3 p-1" style={{ backgroundColor: "#F1F2F4" }}>
             {[

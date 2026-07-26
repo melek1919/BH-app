@@ -4,6 +4,13 @@
 // de fetch("http://...") en dur, elles importent ces fonctions.
 
 const API_BASE = "http://localhost:5000/api";
+const TOKEN_KEY = "bh_token";
+
+export const tokenStorage = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (token) => localStorage.setItem(TOKEN_KEY, token),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
+};
 // Idéalement, bascule vers une variable d'env Vite une fois en prod :
 // const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -13,12 +20,24 @@ const API_BASE = "http://localhost:5000/api";
  * (ex: { message: "identifiant_unique déjà utilisé" }).
  */
 async function request(path, options = {}) {
+  const token = tokenStorage.get();
+
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
     ...options,
   });
 
-  // 204 No Content (ex: DELETE) n'a pas de body à parser
+  // Session expirée ou invalide : on nettoie et on prévient l'app pour
+  // renvoyer l'utilisateur sur l'écran de login (voir AuthContext).
+  if (res.status === 401) {
+    tokenStorage.clear();
+    window.dispatchEvent(new Event("bh:unauthorized"));
+  }
+
   if (res.status === 204) return null;
 
   const body = await res.json().catch(() => null);
@@ -115,4 +134,56 @@ export const importApi = {
     if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
     return body;
   },
+};
+
+
+
+// injecter() reçoit un fichier (blob) en retour, pas du JSON — traitement
+// différent du wrapper `request` habituel : on déclenche le téléchargement
+// directement depuis la réponse.
+// À ajouter dans src/services/api.js.
+// injecter() reçoit un fichier (blob) en retour, pas du JSON — traitement
+// différent du wrapper `request` habituel : on déclenche le téléchargement
+// directement depuis la réponse.
+export const contratInjectionApi = {
+  liste: () => request("/contrats-injection/liste"),
+
+  injecter: async (contratIds) => {
+    const res = await fetch(`${API_BASE}/contrats-injection/injecter`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contratIds }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.message || `Erreur ${res.status}`);
+    }
+
+    // Déclenche le téléchargement du fichier reçu
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : "injection_SI.xlsx";
+    const lotLabel = res.headers.get("X-Lot-Injection") || null;
+    const injecteCount = Number(res.headers.get("X-Lot-Injecte-Count") || 0);
+    const ignoreCount = Number(res.headers.get("X-Lot-Ignore-Count") || 0);
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+    return { lotLabel, injecteCount, ignoreCount };
+  },
+};
+
+export const authApi = {
+  login: (email, mot_de_passe) =>
+    request("/auth/login", { method: "POST", body: JSON.stringify({ email, mot_de_passe }) }),
+  me: () => request("/auth/me"),
 };

@@ -1,6 +1,7 @@
 import pool from '../config/database.js';
 import { parseVehiculesFile } from '../services/importVehicules.service.js';
 import { parseEtablissementsFile } from '../services/importEtablissements.service.js';
+
 const CHUNK_SIZE = 500;
 const COLS_PER_ROW = 12; // contrat_id + 11 champs véhicule
 const ETAB_COLS_PER_ROW = 8;
@@ -37,6 +38,28 @@ function rejectMissingContrats(rows, contratMap) {
     }
 }
 
+// Un véhicule déjà en base (même immatriculation) ne peut pas être réimporté —
+// c'est ce qui garantit que si un fichier est réuploadé après correction,
+// les lignes déjà insérées la fois précédente restent bloquées.
+async function rejectExistingImmatriculations(client, rows) {
+    const immats = [...new Set(rows.filter((r) => r.valid && r.data.immatriculation).map((r) => r.data.immatriculation.trim().toUpperCase()))];
+    if (immats.length === 0) return;
+
+    const { rows: existants } = await client.query(
+        'SELECT UPPER(TRIM(immatriculation)) AS immat FROM vehicule WHERE UPPER(TRIM(immatriculation)) = ANY($1)',
+        [immats]
+    );
+    const existantsSet = new Set(existants.map((r) => r.immat));
+
+    for (const row of rows) {
+        if (!row.valid || !row.data.immatriculation) continue;
+        if (existantsSet.has(row.data.immatriculation.trim().toUpperCase())) {
+            row.errors.push(`Véhicule déjà existant en base (immatriculation "${row.data.immatriculation}")`);
+            row.valid = false;
+        }
+    }
+}
+
 // -----------------------------------------------------------------
 // DRY-RUN : parse + valide + vérifie les contrats, n'écrit rien.
 // -----------------------------------------------------------------
@@ -49,6 +72,7 @@ const dryRunVehicules = async (req, res, next) => {
 
         const contratMap = await resolveContrats(pool, rows);
         rejectMissingContrats(rows, contratMap);
+        await rejectExistingImmatriculations(pool, rows);
 
         res.json(buildSummary(rows));
     } catch (err) { next(err); }
@@ -69,6 +93,7 @@ const commitVehicules = async (req, res, next) => {
     try {
         const contratMap = await resolveContrats(client, rows);
         rejectMissingContrats(rows, contratMap);
+        await rejectExistingImmatriculations(client, rows);
 
         const toInsert = rows
             .filter((r) => r.valid)
@@ -168,6 +193,31 @@ async function upsertEtablissements(client, rows) {
     return traites;
 }
 
+// Si le N. Police existe déjà en base MAIS rattaché à un établissement
+// différent (autre identifiant_unique), on ne réassigne pas silencieusement
+// — c'est signalé comme conflit, à corriger manuellement.
+async function rejectConflictingContrats(client, rows) {
+    const avecPolice = rows.filter((r) => r.valid && r.data.numero_police);
+    if (avecPolice.length === 0) return;
+
+    const numeroPolices = [...new Set(avecPolice.map((r) => r.data.numero_police))];
+    const { rows: existants } = await client.query(
+        `SELECT c.numero_police, e.identifiant_unique
+         FROM contrat c JOIN etablissement e ON e.id = c.etablissement_id
+         WHERE c.numero_police = ANY($1)`,
+        [numeroPolices]
+    );
+    const etabActuelParPolice = new Map(existants.map((r) => [r.numero_police, r.identifiant_unique]));
+
+    for (const row of avecPolice) {
+        const etabActuel = etabActuelParPolice.get(row.data.numero_police);
+        if (etabActuel && etabActuel !== row.data.identifiant_unique) {
+            row.errors.push(`N. Police déjà rattaché à un autre établissement (${etabActuel})`);
+            row.valid = false;
+        }
+    }
+}
+
 // Rattache/crée le contrat pour les lignes qui ont un N. Police renseigné.
 // Les dates de validité ne sont fixées qu'à la création — un contrat déjà
 // existant garde ses dates réelles, seul son etablissement_id est resynchronisé.
@@ -215,6 +265,7 @@ const dryRunEtablissements = async (req, res, next) => {
         if (headerError) return res.status(400).json({ message: headerError });
 
         dedupeByIdentifiant(rows);
+        await rejectConflictingContrats(pool, rows);
         res.json(buildSummary(rows));
     } catch (err) { next(err); }
 };
@@ -230,6 +281,8 @@ const commitEtablissements = async (req, res, next) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
+        await rejectConflictingContrats(client, rows);
 
         const etablissementsTraites = await upsertEtablissements(client, rows);
         const contratsTraites = await upsertContratsLies(client, rows);

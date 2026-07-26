@@ -1,7 +1,13 @@
 import pool from '../config/database.js';
 
 const findAll = async () => {
-    const { rows } = await pool.query('SELECT * FROM etablissement ORDER BY id');
+    const { rows } = await pool.query(`
+        SELECT e.*, COUNT(c.id) as nb_contrats
+        FROM etablissement e
+        LEFT JOIN contrat c ON c.etablissement_id = e.id
+        GROUP BY e.id
+        ORDER BY e.id
+    `);
     return rows;
 };
 

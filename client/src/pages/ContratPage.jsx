@@ -81,6 +81,8 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
     const nextErrors = {};
     if (!form.immatriculation.trim()) nextErrors.immatriculation = "Champ requis";
     if (!form.nb_places) nextErrors.nb_places = "Champ requis";
+    else if (!/^[0-9]+$/.test(form.nb_places)) nextErrors.nb_places = "Doit être un nombre";
+    if (form.puissance && !/^[0-9]+$/.test(form.puissance)) nextErrors.puissance = "Doit être un nombre";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     onSubmit(form);
@@ -131,7 +133,8 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
           </div>
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Puissance</label>
-            <input className="form-control" type="number" style={{ fontSize: 13, borderColor: BORDER }} value={form.puissance} onChange={update("puissance")} />
+            <input className="form-control" type="number" style={{ fontSize: 13, borderColor: errors.puissance ? "#B3261E" : BORDER }} value={form.puissance} onChange={update("puissance")} />
+            {errors.puissance && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.puissance}</p>}
           </div>
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Places *</label>
@@ -165,6 +168,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [statutFilter, setStatutFilter] = useState("actif");
 
   const [modalMode, setModalMode] = useState(null); // "create" | "edit" | null
   const [editingVehicule, setEditingVehicule] = useState(null);
@@ -193,10 +197,13 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
   }, [toast]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return vehicules;
     const q = search.toLowerCase();
-    return vehicules.filter((v) => (v.immatriculation || "").toLowerCase().includes(q) || (v.marque || "").toLowerCase().includes(q));
-  }, [vehicules, search]);
+    return vehicules.filter((v) => {
+      const matchesSearch = !q || (v.immatriculation || "").toLowerCase().includes(q) || (v.marque || "").toLowerCase().includes(q);
+      const matchesStatut = !statutFilter || v.statut_retrait === statutFilter;
+      return matchesSearch && matchesStatut;
+    });
+  }, [vehicules, search, statutFilter]);
 
   const stats = useMemo(() => {
     const actifs = vehicules.filter((v) => v.statut_retrait === "actif");
@@ -361,10 +368,10 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
         </div>
       </div>
 
-      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div className="d-flex align-items-center gap-2">
+      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-3">
+        <div className="d-flex gap-2 flex-wrap">
           <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Véhicules ({vehicules.length})</p>
-          <div className="position-relative ms-2">
+          <div className="position-relative">
             <Search size={13} color={MUTED} style={{ position: "absolute", left: 10, top: 9 }} />
             <input
               className="form-control rounded-3"
@@ -373,6 +380,32 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+          </div>
+
+     
+
+          <div className="d-flex align-items-center rounded-3 p-1" style={{ backgroundColor: "#F1F2F4" }}>
+            {[
+              { key: "actif", label: "Actifs" },
+              { key: "retire", label: "Retirés" },
+            ].map((opt) => (
+              <button
+                key={opt.key}
+                className="btn btn-sm border-0"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 500,
+                  padding: "4px 12px",
+                  borderRadius: 6,
+                  backgroundColor: statutFilter === opt.key ? "#fff" : "transparent",
+                  color: statutFilter === opt.key ? NAVY : MUTED,
+                  boxShadow: statutFilter === opt.key ? "0 1px 3px rgba(11,31,56,0.12)" : "none",
+                }}
+                onClick={() => setStatutFilter(opt.key)}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         </div>
         <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13, padding: "8px 14px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }} onClick={openCreate}>

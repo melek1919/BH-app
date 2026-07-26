@@ -1,22 +1,26 @@
-import { LayoutDashboard, Building2, Car, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Building2, Car, FileStack, ChevronRight, LogOut } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 import logo from "../../assets/bh-logo.png"; // ajuste le chemin selon l'emplacement réel
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "etablissements", label: "Établissements", icon: Building2 },
   { key: "vehicules", label: "Véhicules", icon: Car },
+  { key: "contrats-injection", label: "Contrats", icon: FileStack },
 ];
 
 const TITLES = {
   dashboard: "Dashboard",
   etablissements: "Établissements",
   vehicules: "Véhicules",
+  "contrats-injection": "Contrats",
 };
 
 const SUBTITLES = {
   dashboard: "Vue d'ensemble du portefeuille",
   etablissements: "Gestion des établissements publics",
   vehicules: "Parc automobile des établissements",
+  "contrats-injection": "Sélection et injection des contrats dans le SI",
 };
 
 // Couleurs de marque (Bootstrap n'a pas ces teintes par défaut)
@@ -28,7 +32,22 @@ const ACTIVE_BG = "#FFFFFF";
 const HOVER_BG = "#E9ECF1";
 const MUTED = "#6B7684";
 
+const ROLE_LABELS = {
+  admin: "Administrateur",
+  gestion_etablissement: "Gestion établissements",
+  gestion_vehicule: "Gestion véhicules",
+  gestion_globale: "Gestion globale",
+};
+
 export default function SidebarLayout({ active, onNavigate, children }) {
+  const { user, logout } = useAuth();
+
+  const initiales = user
+    ? `${(user.prenom || "").charAt(0)}${(user.nom || "").charAt(0)}`.toUpperCase() || "?"
+    : "?";
+  const nomComplet = user ? `${user.prenom || ""} ${user.nom || ""}`.trim() : "";
+  const roleLabel = user ? ROLE_LABELS[user.role] || user.role : "";
+
   return (
     <div className="d-flex vh-100 w-100" style={{ backgroundColor: "#FAFBFC" }}>
       {/* SIDEBAR */}
@@ -96,21 +115,40 @@ export default function SidebarLayout({ active, onNavigate, children }) {
             </p>
           </div>
 
-          <div className="d-flex align-items-center gap-2">
-            <span
-              className="d-flex align-items-center justify-content-center rounded-circle text-white"
-              style={{ width: 32, height: 32, fontSize: 12, backgroundColor: NAVY }}
-            >
-              AB
-            </span>
-            <div>
-              <p className="mb-0 fw-medium" style={{ fontSize: 12.5, color: "#161B22" }}>
-                A. Ben Salah
-              </p>
-              <p className="mb-0" style={{ fontSize: 10.5, color: "#8A97A6" }}>
-                Agent
-              </p>
+          <div className="d-flex align-items-center gap-3">
+            <div className="d-flex align-items-center gap-2">
+              <span
+                className="d-flex align-items-center justify-content-center rounded-circle text-white"
+                style={{ width: 32, height: 32, fontSize: 12, backgroundColor: NAVY, flexShrink: 0 }}
+              >
+                {initiales}
+              </span>
+              <div>
+                <p className="mb-0 fw-medium" style={{ fontSize: 12.5, color: "#161B22" }}>
+                  {nomComplet || "Agent"}
+                </p>
+                <p className="mb-0" style={{ fontSize: 10.5, color: "#8A97A6" }}>
+                  {roleLabel}
+                </p>
+              </div>
             </div>
+
+            <button
+              onClick={logout}
+              title="Se déconnecter"
+              className="btn btn-sm border-0 d-flex align-items-center justify-content-center rounded-3"
+              style={{ width: 34, height: 34, color: MUTED, transition: "background-color .15s, color .15s" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#FBE7E7";
+                e.currentTarget.style.color = "#B3261E";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = MUTED;
+              }}
+            >
+              <LogOut size={15} />
+            </button>
           </div>
         </header>
 

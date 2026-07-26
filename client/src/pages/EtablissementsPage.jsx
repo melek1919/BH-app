@@ -44,7 +44,16 @@ function EtablissementModal({ mode, initialData, onClose, onSubmit, submitting }
   const handleSubmit = () => {
     const nextErrors = {};
     if (!form.nom.trim()) nextErrors.nom = "Champ requis";
+    else if (!/^[a-zA-Z\sàâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ'-]+$/.test(form.nom.trim())) nextErrors.nom = "Doit contenir uniquement des lettres";
+    
     if (!form.identifiant_unique.trim()) nextErrors.identifiant_unique = "Champ requis";
+    
+    if (form.telephone && !/^[0-9+\s-]+$/.test(form.telephone)) nextErrors.telephone = "Doit contenir uniquement des chiffres";
+    if (form.mobile && !/^[0-9+\s-]+$/.test(form.mobile)) nextErrors.mobile = "Doit contenir uniquement des chiffres";
+    if (form.email && !/^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(form.email)) nextErrors.email = "Format email invalide";
+    
+    if (form.responsable_parc_auto && !/^[a-zA-Z\sàâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ'-]+$/.test(form.responsable_parc_auto.trim())) nextErrors.responsable_parc_auto = "Doit contenir uniquement des lettres";
+    
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     // Convert empty strings to null for optional fields
@@ -98,22 +107,26 @@ function EtablissementModal({ mode, initialData, onClose, onSubmit, submitting }
           </div>
           <div className="col-6">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Responsable parc auto</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.responsable_parc_auto || ""} onChange={update("responsable_parc_auto")} />
+            <input className="form-control" style={{ fontSize: 13, borderColor: errors.responsable_parc_auto ? "#B3261E" : BORDER }} value={form.responsable_parc_auto || ""} onChange={update("responsable_parc_auto")} />
+            {errors.responsable_parc_auto && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.responsable_parc_auto}</p>}
           </div>
         </div>
 
         <div className="row g-2">
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Téléphone</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.telephone || ""} onChange={update("telephone")} />
+            <input className="form-control" style={{ fontSize: 13, borderColor: errors.telephone ? "#B3261E" : BORDER }} value={form.telephone || ""} onChange={update("telephone")} />
+            {errors.telephone && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.telephone}</p>}
           </div>
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Mobile</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.mobile || ""} onChange={update("mobile")} />
+            <input className="form-control" style={{ fontSize: 13, borderColor: errors.mobile ? "#B3261E" : BORDER }} value={form.mobile || ""} onChange={update("mobile")} />
+            {errors.mobile && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.mobile}</p>}
           </div>
           <div className="col-4">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Email</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.email || ""} onChange={update("email")} />
+            <input className="form-control" style={{ fontSize: 13, borderColor: errors.email ? "#B3261E" : BORDER }} value={form.email || ""} onChange={update("email")} />
+            {errors.email && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.email}</p>}
           </div>
         </div>
 
@@ -560,6 +573,8 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
+  const [gouvernoratFilter, setGouvernoratFilter] = useState("");
+  const [contratsFilter, setContratsFilter] = useState("");
 
   const [etabModalMode, setEtabModalMode] = useState(null);
   const [editingEtab, setEditingEtab] = useState(null);
@@ -599,9 +614,13 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return etablissements.filter((e) => {
-      return !q || e.nom.toLowerCase().includes(q) || (e.identifiant_unique || "").toLowerCase().includes(q) || (e.gouvernorat || "").toLowerCase().includes(q);
+      const matchesSearch = !q || e.nom.toLowerCase().includes(q) || (e.identifiant_unique || "").toLowerCase().includes(q) || (e.gouvernorat || "").toLowerCase().includes(q);
+      const matchesGouvernorat = !gouvernoratFilter || e.gouvernorat === gouvernoratFilter;
+      const hasContrats = (e.nb_contrats || 0) > 0;
+      const matchesContrats = !contratsFilter || (contratsFilter === "avec" ? hasContrats : !hasContrats);
+      return matchesSearch && matchesGouvernorat && matchesContrats;
     });
-  }, [etablissements, search]);
+  }, [etablissements, search, gouvernoratFilter, contratsFilter]);
 
   const openCreate = () => { setEditingEtab(null); setEtabModalMode("create"); };
   const openEdit = (e) => { setEditingEtab(e); setEtabModalMode("edit"); };
@@ -666,10 +685,23 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
         </div>
       )}
 
-      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-        <div className="position-relative">
-          <Search size={14} color={MUTED} style={{ position: "absolute", left: 12, top: 11 }} />
-          <input className="form-control rounded-3" style={{ fontSize: 13, paddingLeft: 34, width: 280, borderColor: BORDER }} placeholder="Rechercher un établissement..." value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-3">
+        <div className="d-flex gap-2 flex-wrap">
+          <div className="position-relative">
+            <Search size={14} color={MUTED} style={{ position: "absolute", left: 12, top: 11 }} />
+            <input className="form-control rounded-3" style={{ fontSize: 13, paddingLeft: 34, width: 280, borderColor: BORDER }} placeholder="Rechercher un établissement..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+         
+          <select
+            className="form-select rounded-3"
+            style={{ fontSize: 13, borderColor: BORDER, width: 160 }}
+            value={contratsFilter}
+            onChange={(e) => setContratsFilter(e.target.value)}
+          >
+            <option value="">Contrats</option>
+            <option value="avec">Avec contrats</option>
+            <option value="sans">Sans contrats</option>
+          </select>
         </div>
         <span style={{ fontSize: 12.5, color: MUTED }}>{loading ? "Chargement..." : `${filtered.length} établissement${filtered.length > 1 ? "s" : ""}`}</span>
       </div>
