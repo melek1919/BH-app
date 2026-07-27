@@ -29,4 +29,12 @@ const loginSchema = Joi.object({
     mot_de_passe: Joi.string().required(),
 });
 
-export { createUtilisateurSchema, updateUtilisateurSchema, changePasswordSchema, loginSchema };
+const registerSchema = Joi.object({
+    nom: Joi.string().max(255).trim().required(),
+    prenom: Joi.string().max(100).trim().allow('', null),
+    email: Joi.string().email().trim().required(),
+    tel: Joi.string().max(20).trim().allow('', null),
+    mot_de_passe: Joi.string().min(8).max(72).required(),
+});
+
+export { createUtilisateurSchema, updateUtilisateurSchema, changePasswordSchema, loginSchema, registerSchema };

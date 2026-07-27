@@ -1,58 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Car, Search, Plus, X, RotateCcw, Trash2, Pencil, Loader2, AlertCircle, CheckCircle2, Upload, FileSpreadsheet } from "lucide-react";
-import { vehiculesApi, etablissementsApi, importApi } from "../services/api";
+import { vehiculesApi, importApi, contratsApi } from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
+import AutocompleteUsage from "../components/AutocompleteUsage";
 
-// Couleurs de marque — mêmes tokens que SidebarLayout.jsx / DashboardPage.jsx
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
 const BORDER = "#E4E8EE";
 
-const USAGE_OPTIONS = [
-  "Véhicule de tourisme",
-  "Motocycle max 50 cm3",
-  "Motocycle 50-125cm3",
-  "Véhicule sanitaire",
-  "Engins de chantier",
-];
-
-// Couleur d'accent selon le type d'usage, pour repérer visuellement les catégories dans la table
-const USAGE_TAG = (usage = "") => {
-  const u = usage.toLowerCase();
-  if (u.includes("moto")) return { bg: "#EAF1FB", fg: "#2B6CB0" };
-  if (u.includes("sanitaire")) return { bg: "#FBE7E7", fg: "#B3261E" };
-  if (u.includes("engin")) return { bg: "#FDF1DE", fg: "#A15C00" };
-  return { bg: "#EEF2F7", fg: NAVY }; // tourisme / défaut
-};
-
-const STATUT_STYLE = {
-  actif: { bg: "#E7F5EC", fg: "#1E7B3A", label: "Actif" },
-  retire: { bg: "#F1F2F4", fg: "#6B7684", label: "Retiré" },
-};
-
 const EMPTY_FORM = {
-  etablissement_id: "",
+  contrat_numero: "",
   immatriculation: "",
-  usage: USAGE_OPTIONS[0],
+  usage: "",
   marque: "",
+  type_vehicule: "",
   numero_serie: "",
+  bonus_malus: "",
   puissance: "",
   nb_places: "",
+  dmc: "",
 };
-
-function StatusBadge({ statut }) {
-  const s = STATUT_STYLE[statut] || STATUT_STYLE.retire;
-  return (
-    <span style={{ fontSize: 11.5, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: s.bg, color: s.fg, whiteSpace: "nowrap" }}>
-      {s.label}
-    </span>
-  );
-}
 
 // Modale unique pour ajout ET modification — le mode change juste le titre,
 // le libellé du bouton, et si les champs sont préremplis.
 // En mode création, la modale reste ouverte après un ajout réussi (le formulaire
 // se vide pour en saisir un autre) — seul le X ferme la modale dans ce cas.
-function VehiculeModal({ mode = "create", initialData, etablissements, onClose, onSubmit, submitting, justCreated }) {
+function VehiculeModal({ mode = "create", initialData, onClose, onSubmit, submitting, justCreated }) {
   const [form, setForm] = useState(initialData || EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [showSuccess, setShowSuccess] = useState(false);
@@ -69,16 +43,26 @@ function VehiculeModal({ mode = "create", initialData, etablissements, onClose, 
 
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const nextErrors = {};
-    if (!form.etablissement_id) nextErrors.etablissement_id = "Champ requis";
+    if (!form.contrat_numero.trim()) nextErrors.contrat_numero = "N° de police requis";
     if (!form.immatriculation.trim()) nextErrors.immatriculation = "Champ requis";
     if (!form.nb_places) nextErrors.nb_places = "Champ requis";
     else if (!/^[0-9]+$/.test(form.nb_places)) nextErrors.nb_places = "Doit être un nombre";
     if (form.puissance && !/^[0-9]+$/.test(form.puissance)) nextErrors.puissance = "Doit être un nombre";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    onSubmit(form);
+
+    try {
+      const contrat = await contratsApi.getByNumeroPolice(form.contrat_numero.trim());
+      if (!contrat) {
+        setErrors({ contrat_numero: "Numéro de contrat introuvable" });
+        return;
+      }
+      onSubmit({ ...form, contrat_id: contrat.id });
+    } catch {
+      setErrors({ contrat_numero: "Numéro de contrat introuvable" });
+    }
   };
 
   return (
@@ -103,19 +87,15 @@ function VehiculeModal({ mode = "create", initialData, etablissements, onClose, 
           </div>
         )}
 
-        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Établissement *</label>
-        <select
-          className="form-select"
-          style={{ fontSize: 13, borderColor: errors.etablissement_id ? "#B3261E" : BORDER }}
-          value={form.etablissement_id}
-          onChange={update("etablissement_id")}
-        >
-          <option value="">Sélectionner...</option>
-          {etablissements.map((e) => (
-            <option key={e.id} value={e.id}>{e.nom}</option>
-          ))}
-        </select>
-        {errors.etablissement_id && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.etablissement_id}</p>}
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>N° Police *</label>
+        <input
+          className="form-control"
+          style={{ fontSize: 13, borderColor: errors.contrat_numero ? "#B3261E" : BORDER }}
+          placeholder="POL-2025-001"
+          value={form.contrat_numero}
+          onChange={update("contrat_numero")}
+        />
+        {errors.contrat_numero && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.contrat_numero}</p>}
 
         <div className="row g-2">
           <div className="col-6">
@@ -136,11 +116,8 @@ function VehiculeModal({ mode = "create", initialData, etablissements, onClose, 
         </div>
 
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Usage *</label>
-        <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={form.usage} onChange={update("usage")}>
-          {USAGE_OPTIONS.map((u) => (
-            <option key={u} value={u}>{u}</option>
-          ))}
-        </select>
+        <AutocompleteUsage value={form.usage} onChange={(val) => setForm({ ...form, usage: val })} error={errors.usage} />
+        {errors.usage && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.usage}</p>}
 
         <div className="row g-2">
           <div className="col-4">
@@ -164,6 +141,20 @@ function VehiculeModal({ mode = "create", initialData, etablissements, onClose, 
             {errors.nb_places && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.nb_places}</p>}
           </div>
         </div>
+
+        <div className="row g-2">
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Type véhicule</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.type_vehicule || ""} onChange={update("type_vehicule")} placeholder="Berline, SUV, Camion..." />
+          </div>
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Bonus Malus</label>
+            <input className="form-control" type="number" step="0.01" style={{ fontSize: 13, borderColor: BORDER }} value={form.bonus_malus || ""} onChange={update("bonus_malus")} placeholder="0.00" />
+          </div>
+        </div>
+
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Date mise en circulation</label>
+        <input type="date" className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.dmc || ""} onChange={update("dmc")} />
 
         <div className="d-flex gap-2 mt-4">
           <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>
@@ -342,14 +333,13 @@ function ImportVehiculesModal({ onClose, onImported }) {
 }
 
 export default function VehiculesPage() {
+  const { user } = useAuth();
   const [vehicules, setVehicules] = useState([]);
-  const [etablissements, setEtablissements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [statutFilter, setStatutFilter] = useState("actif");
   const [etablissementFilter, setEtablissementFilter] = useState("");
-  const [usageFilter, setUsageFilter] = useState("");
   const [marqueFilter, setMarqueFilter] = useState("");
 
   // Un seul state pilote la modale : null = fermée, "create" = ajout, "edit" = édition
@@ -363,12 +353,8 @@ export default function VehiculesPage() {
     setLoading(true);
     setError(null);
     try {
-      const [vehiculesData, etabData] = await Promise.all([
-        statutFilter === "retire" ? vehiculesApi.getRetires() : vehiculesApi.getAll(),
-        etablissementsApi.getAll(),
-      ]);
+      const vehiculesData = await (statutFilter === "retire" ? vehiculesApi.getRetires() : vehiculesApi.getAll());
       setVehicules(vehiculesData);
-      setEtablissements(etabData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -387,22 +373,25 @@ export default function VehiculesPage() {
       const matchesSearch = !q || 
         (v.immatriculation || "").toLowerCase().includes(q) ||
         (v.marque || "").toLowerCase().includes(q) ||
-        (v.etablissement_nom || "").toLowerCase().includes(q);
+        (v.etablissement_nom || "").toLowerCase().includes(q) ||
+        (v.usage || "").toLowerCase().includes(q);
       const matchesEtablissement = !etablissementFilter || v.etablissement_id === Number(etablissementFilter);
-      const matchesUsage = !usageFilter || v.usage === usageFilter;
       const matchesMarque = !marqueFilter || (v.marque || "").toLowerCase() === marqueFilter.toLowerCase();
-      return matchesSearch && matchesEtablissement && matchesUsage && matchesMarque;
+      return matchesSearch && matchesEtablissement && matchesMarque;
     });
-  }, [vehicules, search, etablissementFilter, usageFilter, marqueFilter]);
+  }, [vehicules, search, etablissementFilter, marqueFilter]);
 
   const buildPayload = (form) => ({
-    etablissement_id: Number(form.etablissement_id),
+    contrat_id: Number(form.contrat_id),
     immatriculation: form.immatriculation,
     usage: form.usage,
     marque: form.marque || null,
+    type_vehicule: form.type_vehicule || null,
     numero_serie: form.numero_serie || null,
+    bonus_malus: form.bonus_malus ? Number(form.bonus_malus) : null,
     puissance: form.puissance ? Number(form.puissance) : null,
     nb_places: Number(form.nb_places),
+    dmc: form.dmc || null,
   });
 
   const openCreate = () => {
@@ -466,20 +455,24 @@ export default function VehiculesPage() {
           </p>
         </div>
         <div className="d-flex align-items-center gap-2">
-          <button
-            className="btn d-flex align-items-center gap-2 rounded-3"
-            style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }}
-            onClick={() => setShowImport(true)}
-          >
-            <Upload size={15} /> Importer
-          </button>
-          <button
-            className="btn d-flex align-items-center gap-2 text-white rounded-3"
-            style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }}
-            onClick={openCreate}
-          >
-            <Plus size={15} /> Ajouter un véhicule
-          </button>
+          {user?.role !== 'guest' && (
+            <button
+              className="btn d-flex align-items-center gap-2 rounded-3"
+              style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }}
+              onClick={() => setShowImport(true)}
+            >
+              <Upload size={15} /> Importer
+            </button>
+          )}
+          {user?.role !== 'guest' && (
+            <button
+              className="btn d-flex align-items-center gap-2 text-white rounded-3"
+              style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }}
+              onClick={openCreate}
+            >
+              <Plus size={15} /> Ajouter un véhicule
+            </button>
+          )}
         </div>
       </div>
 
@@ -495,22 +488,6 @@ export default function VehiculesPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-         
-
-          <select
-            className="form-select rounded-3"
-            style={{ fontSize: 13, borderColor: BORDER, width: 140 }}
-            value={usageFilter}
-            onChange={(e) => setUsageFilter(e.target.value)}
-          >
-            <option value="">Usage</option>
-            {[...new Set(vehicules.map((v) => v.usage).filter(Boolean))].sort().map((u) => (
-              <option key={u} value={u}>{u}</option>
-            ))}
-          </select>
-
-        
 
           <div className="d-flex align-items-center rounded-3 p-1" style={{ backgroundColor: "#F1F2F4" }}>
             {[
@@ -569,7 +546,6 @@ export default function VehiculesPage() {
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Usage</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "center", padding: "12px 8px" }}>Puissance</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "center", padding: "12px 8px" }}>Places</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Statut</th>
                 <th style={{ padding: "12px 16px" }}></th>
               </tr>
             </thead>
@@ -609,39 +585,40 @@ export default function VehiculesPage() {
                     <td style={{ padding: "12px 8px", fontSize: 12.5, textAlign: "center", color: MUTED }}>
                       {v.nb_places ?? "—"}
                     </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <StatusBadge statut={v.statut_retrait} />
-                    </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div className="d-flex align-items-center gap-2 justify-content-end">
-                        <button
-                          className="btn btn-sm d-flex align-items-center gap-1 border-0"
-                          style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EEF2F7", color: NAVY, borderRadius: 8 }}
-                          onClick={() => openEdit(v)}
-                        >
-                          <Pencil size={13} /> Modifier
-                        </button>
-                        <button
-                          className="btn btn-sm d-flex align-items-center gap-1 border-0"
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 500,
-                            borderRadius: 8,
-                            backgroundColor: isActif ? "#FBE7E7" : "#E7F5EC",
-                            color: isActif ? "#B3261E" : "#1E7B3A",
-                          }}
-                          onClick={() => toggleStatut(v)}
-                        >
-                          {isActif ? (
-                            <>
-                              <Trash2 size={13} /> Retirer
-                            </>
-                          ) : (
-                            <>
-                              <RotateCcw size={13} /> Restaurer
-                            </>
-                          )}
-                        </button>
+                        {user?.role !== 'guest' && (
+                          <button
+                            className="btn btn-sm d-flex align-items-center gap-1 border-0"
+                            style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
+                            onClick={() => openEdit(v)}
+                          >
+                            <Pencil size={13} /> Modifier
+                          </button>
+                        )}
+                        {user?.role !== 'guest' && (
+                          <button
+                            className="btn btn-sm d-flex align-items-center gap-1 border-0"
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 500,
+                              borderRadius: 8,
+                              backgroundColor: isActif ? "#FBE7E7" : "#E7F5EC",
+                              color: isActif ? "#B3261E" : "#1E7B3A",
+                            }}
+                            onClick={() => toggleStatut(v)}
+                          >
+                            {isActif ? (
+                              <>
+                                <Trash2 size={13} /> Retirer
+                              </>
+                            ) : (
+                              <>
+                                <RotateCcw size={13} /> Restaurer
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -658,7 +635,7 @@ export default function VehiculesPage() {
           initialData={
             modalMode === "edit" && editingVehicule
               ? {
-                  etablissement_id: String(editingVehicule.etablissement_id),
+                  contrat_numero: editingVehicule.numero_police || "",
                   immatriculation: editingVehicule.immatriculation || "",
                   usage: editingVehicule.usage || USAGE_OPTIONS[0],
                   marque: editingVehicule.marque || "",
@@ -668,7 +645,6 @@ export default function VehiculesPage() {
                 }
               : null
           }
-          etablissements={etablissements}
           onClose={closeModal}
           onSubmit={handleSubmitModal}
           submitting={submitting}

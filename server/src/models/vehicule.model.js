@@ -2,7 +2,7 @@ import pool from '../config/database.js';
 
 const findAll = async () => {
     const { rows } = await pool.query(
-        `SELECT v.*, e.nom as etablissement_nom 
+        `SELECT v.*, e.nom as etablissement_nom, c.numero_police
          FROM vehicule v 
          LEFT JOIN contrat c ON v.contrat_id = c.id 
          LEFT JOIN etablissement e ON c.etablissement_id = e.id 
@@ -19,7 +19,7 @@ const findById = async (id) => {
 
 const findRetires = async () => {
     const { rows } = await pool.query(
-        `SELECT v.*, e.nom as etablissement_nom 
+        `SELECT v.*, e.nom as etablissement_nom, c.numero_police
          FROM vehicule v 
          LEFT JOIN contrat c ON v.contrat_id = c.id 
          LEFT JOIN etablissement e ON c.etablissement_id = e.id 
@@ -32,7 +32,7 @@ const findRetires = async () => {
 // ✅ remplace findByEtablissement : filtre maintenant sur contrat_id
 const findByContrat = async (contratId) => {
     const { rows } = await pool.query(
-        `SELECT v.*, e.nom as etablissement_nom 
+        `SELECT v.*, e.nom as etablissement_nom, c.numero_police
          FROM vehicule v 
          LEFT JOIN contrat c ON v.contrat_id = c.id 
          LEFT JOIN etablissement e ON c.etablissement_id = e.id 

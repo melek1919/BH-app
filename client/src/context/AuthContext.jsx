@@ -41,8 +41,15 @@ export function AuthProvider({ children }) {
     return utilisateur;
   };
 
+  const register = async (data) => {
+    const { token, utilisateur } = await authApi.register(data);
+    tokenStorage.set(token);
+    setUser(utilisateur);
+    return utilisateur;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAuthenticated: Boolean(user) }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, isAuthenticated: Boolean(user) }}>
       {children}
     </AuthContext.Provider>
   );

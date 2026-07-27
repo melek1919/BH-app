@@ -1,5 +1,6 @@
 // Rôles disponibles pour un utilisateur (agent BH Assurances)
 export const ROLES = {
+    GUEST: 'guest',                              // Lecture seule — aucune opération d'écriture
     ADMIN: 'admin',                              // Tout, y compris la gestion des utilisateurs
     GESTION_ETABLISSEMENT: 'gestion_etablissement', // Établissements uniquement
     GESTION_VEHICULE: 'gestion_vehicule',           // Véhicules uniquement

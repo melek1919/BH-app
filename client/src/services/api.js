@@ -74,6 +74,7 @@ export const etablissementsApi = {
 export const contratsApi = {
   getByEtablissement: (etablissementId) => request(`/etablissements/${etablissementId}/contrats`),
   getOne: (id) => request(`/contrats/${id}`),
+  getByNumeroPolice: (numero) => request(`/contrats/by-police/${encodeURIComponent(numero)}`),
   create: (etablissementId, data) =>
     request(`/etablissements/${etablissementId}/contrats`, { method: "POST", body: JSON.stringify(data) }),
   remove: (id) => request(`/contrats/${id}`, { method: "DELETE" }),
@@ -185,5 +186,7 @@ export const contratInjectionApi = {
 export const authApi = {
   login: (email, mot_de_passe) =>
     request("/auth/login", { method: "POST", body: JSON.stringify({ email, mot_de_passe }) }),
+  register: (data) =>
+    request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
   me: () => request("/auth/me"),
 };

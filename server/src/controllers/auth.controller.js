@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import model from '../models/utilisateur.model.js';
-import { loginSchema } from '../validators/utilisateur.validator.js';
+import { loginSchema, registerSchema } from '../validators/utilisateur.validator.js';
 
 const login = async (req, res, next) => {
     const { error, value } = loginSchema.validate(req.body, { abortEarly: false });
@@ -40,10 +40,40 @@ const login = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+const register = async (req, res, next) => {
+    const { error, value } = registerSchema.validate(req.body, { abortEarly: false });
+    if (error) {
+        return res.status(400).json({ message: 'données invalides', details: error.details.map((d) => d.message) });
+    }
+
+    try {
+        const utilisateur = await model.create({ ...value, role: 'guest' });
+
+        const payload = {
+            id: utilisateur.id,
+            nom: utilisateur.nom,
+            prenom: utilisateur.prenom,
+            email: utilisateur.email,
+            role: utilisateur.role,
+        };
+
+        const token = jwt.sign(payload, process.env.JWT_SECRET, {
+            expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+        });
+
+        res.status(201).json({ token, utilisateur: payload });
+    } catch (err) {
+        if (err.code === '23505') {
+            return res.status(409).json({ message: 'Cet email est déjà utilisé' });
+        }
+        next(err);
+    }
+};
+
 // Retourne l'utilisateur courant à partir du token — utile au frontend au
 // chargement de l'app pour savoir qui est connecté et quel rôle il a.
 const me = (req, res) => {
     res.json(req.user);
 };
 
-export default { login, me };
+export default { login, register, me };

@@ -33,6 +33,7 @@ const HOVER_BG = "#E9ECF1";
 const MUTED = "#6B7684";
 
 const ROLE_LABELS = {
+  guest: "Invité",
   admin: "Administrateur",
   gestion_etablissement: "Gestion établissements",
   gestion_vehicule: "Gestion véhicules",

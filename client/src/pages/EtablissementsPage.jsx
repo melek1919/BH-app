@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import {
   Building2,
   Search,
@@ -113,25 +114,21 @@ function EtablissementModal({ mode, initialData, onClose, onSubmit, submitting }
         </div>
 
         <div className="row g-2">
-          <div className="col-4">
+          <div className="col-6">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Téléphone</label>
             <input className="form-control" style={{ fontSize: 13, borderColor: errors.telephone ? "#B3261E" : BORDER }} value={form.telephone || ""} onChange={update("telephone")} />
             {errors.telephone && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.telephone}</p>}
           </div>
-          <div className="col-4">
+          <div className="col-6">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Mobile</label>
             <input className="form-control" style={{ fontSize: 13, borderColor: errors.mobile ? "#B3261E" : BORDER }} value={form.mobile || ""} onChange={update("mobile")} />
             {errors.mobile && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.mobile}</p>}
           </div>
-          <div className="col-4">
-            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Email</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: errors.email ? "#B3261E" : BORDER }} value={form.email || ""} onChange={update("email")} />
-            {errors.email && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.email}</p>}
-          </div>
         </div>
 
-        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Statut GIAS PROD</label>
-        <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.statut_gias_prod || ""} onChange={update("statut_gias_prod")} placeholder="ex: injection PROD lot 5" />
+        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Email</label>
+        <input className="form-control" style={{ fontSize: 13, borderColor: errors.email ? "#B3261E" : BORDER }} value={form.email || ""} onChange={update("email")} />
+        {errors.email && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.email}</p>}
 
         <div className="d-flex gap-2 mt-4">
           <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
@@ -236,6 +233,7 @@ function NewContratModal({ onClose, onSubmit, submitting }) {
 }
 
 function QuickViewModal({ etablissement, onClose, onOpenContrat }) {
+  const { user } = useAuth();
   const [contrats, setContrats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showNewContrat, setShowNewContrat] = useState(false);
@@ -320,13 +318,15 @@ function QuickViewModal({ etablissement, onClose, onOpenContrat }) {
               <div>
                 <p className="mb-0 fw-semibold" style={{ fontSize: 14, color: "#161B22" }}>Contrats ({nbContrats})</p>
               </div>
-              <button
-                className="btn d-flex align-items-center gap-2 border-0"
-                style={{ fontSize: 12, fontWeight: 600, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8, padding: "7px 13px", boxShadow: "0 2px 6px rgba(43,108,176,0.15)" }}
-                onClick={() => setShowNewContrat(true)}
-              >
-                <Plus size={13} /> Nouveau contrat
-              </button>
+              {user?.role !== 'guest' && (
+                <button
+                  className="btn d-flex align-items-center gap-2 border-0"
+                  style={{ fontSize: 12, fontWeight: 600, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8, padding: "7px 13px", boxShadow: "0 2px 6px rgba(43,108,176,0.15)" }}
+                  onClick={() => setShowNewContrat(true)}
+                >
+                  <Plus size={13} /> Nouveau contrat
+                </button>
+              )}
             </div>
             {nbContrats === 0 ? (
               <div className="text-center py-4 rounded-3" style={{ backgroundColor: "#F8FAFC", border: "1px dashed " + BORDER, fontSize: 13, color: MUTED }}>
@@ -569,6 +569,7 @@ function ImportEtablissementsModal({ onClose, onImported }) {
 }
 
 export default function EtablissementsPage({ onOpenContrat, reopenEtablissement, onReopenConsumed }) {
+  const { user } = useAuth();
   const [etablissements, setEtablissements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -667,15 +668,21 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
           <p className="mb-0" style={{ fontSize: 13, color: MUTED }}>Établissements publics et leurs contrats</p>
         </div>
         <div className="d-flex gap-2">
-          <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowFusion(true)}>
-            <GitMerge size={15} /> Fusionner
-          </button>
-          <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowImport(true)}>
-            <Upload size={15} /> Importer
-          </button>
-          <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY }} onClick={openCreate}>
-            <Plus size={15} /> Nouvel établissement
-          </button>
+          {user?.role !== 'guest' && (
+            <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowFusion(true)}>
+              <GitMerge size={15} /> Fusionner
+            </button>
+          )}
+          {user?.role !== 'guest' && (
+            <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowImport(true)}>
+              <Upload size={15} /> Importer
+            </button>
+          )}
+          {user?.role !== 'guest' && (
+            <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13.5, padding: "9px 16px", backgroundColor: NAVY, borderColor: NAVY }} onClick={openCreate}>
+              <Plus size={15} /> Nouvel établissement
+            </button>
+          )}
         </div>
       </div>
 
@@ -728,7 +735,6 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Gouvernorat</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Responsable</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Contact</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Statut GIAS</th>
                 <th style={{ padding: "12px 16px" }}></th>
               </tr>
             </thead>
@@ -757,7 +763,6 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
                   <td style={{ padding: "12px 8px", fontSize: 12, color: MUTED }}>
                     {e.telephone || e.mobile || e.email || "—"}
                   </td>
-                  <td style={{ padding: "12px 8px", fontSize: 12, color: MUTED }}>{e.statut_gias_prod || "—"}</td>
                   <td style={{ padding: "12px 16px", textAlign: "right" }}>
                     <button
                       className="btn btn-sm d-flex align-items-center gap-1 border-0 ms-auto"

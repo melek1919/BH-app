@@ -13,6 +13,17 @@ const findById = async (id) => {
     return rows[0];
 };
 
+const findByNumeroPolice = async (numero) => {
+    const { rows } = await pool.query(
+        `SELECT c.*, e.nom as etablissement_nom
+         FROM contrat c
+         LEFT JOIN etablissement e ON c.etablissement_id = e.id
+         WHERE c.numero_police = $1`,
+        [numero]
+    );
+    return rows[0];
+};
+
 const create = async (etablissementId, { numero_police }) => {
     const annee = new Date().getFullYear();
     const validite_du = `${annee}-01-01`;
@@ -49,4 +60,4 @@ const renouvelerContratsExpires = async () => {
     return rows; // liste des contrats qui viennent d'être prolongés, utile pour logguer
 };
 
-export default { findByEtablissement, findById, create, remove, renouvelerContratsExpires };
+export default { findByEtablissement, findById, findByNumeroPolice, create, remove, renouvelerContratsExpires };

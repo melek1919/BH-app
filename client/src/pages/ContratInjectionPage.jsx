@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, Search, Download, Loader2, AlertCircle, CheckCircle2, RefreshCw, Building2, Clock, X, Layers, Car } from "lucide-react";
 import { contratInjectionApi } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -47,6 +48,7 @@ function LotBadge({ numero }) {
 }
 
 export default function ContratsInjectionPage() {
+  const { user } = useAuth();
   const [contrats, setContrats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -298,7 +300,7 @@ export default function ContratsInjectionPage() {
       </div>
 
       {/* Barre d'action flottante — apparaît dès qu'au moins un contrat est sélectionné */}
-      {selected.size > 0 && (
+      {selected.size > 0 && user?.role !== 'guest' && (
         <div
           className="position-fixed d-flex align-items-center gap-3 rounded-4 px-4 py-3"
           style={{

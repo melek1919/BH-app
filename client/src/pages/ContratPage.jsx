@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
   FileText,
@@ -20,27 +21,12 @@ import {
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { vehiculesApi } from "../services/api";
+import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
+import AutocompleteUsage from "../components/AutocompleteUsage";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
 const BORDER = "#E4E8EE";
-
-const USAGE_OPTIONS = [
-  "Véhicule de tourisme",
-  "Motocycle max 50 cm3",
-  "Motocycle 50-125cm3",
-  "Véhicule sanitaire",
-  "Engins de chantier",
-];
-
-// Mêmes tags colorés que VehiculesPage.jsx, pour une cohérence visuelle totale
-const USAGE_TAG = (usage = "") => {
-  const u = usage.toLowerCase();
-  if (u.includes("moto")) return { bg: "#EAF1FB", fg: "#2B6CB0" };
-  if (u.includes("sanitaire")) return { bg: "#FBE7E7", fg: "#B3261E" };
-  if (u.includes("engin")) return { bg: "#FDF1DE", fg: "#A15C00" };
-  return { bg: "#EEF2F7", fg: NAVY };
-};
 
 const STATUT_STYLE = {
   actif: { bg: "#E7F5EC", fg: "#1E7B3A", label: "Actif" },
@@ -56,7 +42,7 @@ function StatusBadge({ statut }) {
   );
 }
 
-const EMPTY_FORM = { immatriculation: "", usage: USAGE_OPTIONS[0], marque: "", numero_serie: "", puissance: "", nb_places: "", dmc: "" };
+const EMPTY_FORM = { immatriculation: "", usage: "", marque: "", type_vehicule: "", numero_serie: "", bonus_malus: "", puissance: "", nb_places: "", dmc: "" };
 
 // Modale unique ajout/modification — pas de champ établissement (le contrat fixe déjà le contexte).
 // Reste ouverte après un ajout réussi, comme sur VehiculesPage.
@@ -122,9 +108,8 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
         </div>
 
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Usage *</label>
-        <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={form.usage} onChange={update("usage")}>
-          {USAGE_OPTIONS.map((u) => <option key={u} value={u}>{u}</option>)}
-        </select>
+        <AutocompleteUsage value={form.usage} onChange={(val) => setForm({ ...form, usage: val })} error={errors.usage} />
+        {errors.usage && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.usage}</p>}
 
         <div className="row g-2">
           <div className="col-4">
@@ -143,8 +128,19 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
           </div>
         </div>
 
+        <div className="row g-2">
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Type véhicule</label>
+            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.type_vehicule || ""} onChange={update("type_vehicule")} placeholder="Berline, SUV, Camion..." />
+          </div>
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Bonus Malus</label>
+            <input className="form-control" type="number" step="0.01" style={{ fontSize: 13, borderColor: BORDER }} value={form.bonus_malus || ""} onChange={update("bonus_malus")} placeholder="0.00" />
+          </div>
+        </div>
+
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Mise en circulation</label>
-        <input type="date" className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.dmc} onChange={update("dmc")} />
+        <input type="date" className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.dmc || ""} onChange={update("dmc")} />
 
         <div className="d-flex gap-2 mt-4">
           <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
@@ -164,6 +160,7 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
 // Accès uniquement via clic sur un contrat dans la popup établissement.
 // ---------------------------------------------------------------
 export default function ContratPage({ contrat, etablissement, onBack }) {
+  const { user } = useAuth();
   const [vehicules, setVehicules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -408,9 +405,11 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
             ))}
           </div>
         </div>
-        <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13, padding: "8px 14px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }} onClick={openCreate}>
-          <Plus size={14} /> Ajouter un véhicule
-        </button>
+        {user?.role !== 'guest' && (
+          <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13, padding: "8px 14px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }} onClick={openCreate}>
+            <Plus size={14} /> Ajouter un véhicule
+          </button>
+        )}
       </div>
 
       {error && (
@@ -480,26 +479,30 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div className="d-flex align-items-center gap-2 justify-content-end">
-                        <button
-                          className="btn btn-sm d-flex align-items-center gap-1 border-0"
-                          style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
-                          onClick={() => openEdit(v)}
-                        >
-                          <Pencil size={13} /> Modifier
-                        </button>
-                        <button
-                          className="btn btn-sm d-flex align-items-center gap-1 border-0"
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 500,
-                            borderRadius: 8,
-                            backgroundColor: isActif ? "#FBE7E7" : "#E7F5EC",
-                            color: isActif ? "#B3261E" : "#1E7B3A",
-                          }}
-                          onClick={() => toggleStatut(v)}
-                        >
-                          {isActif ? (<><Trash2 size={13} /> Retirer</>) : (<><RotateCcw size={13} /> Restaurer</>)}
-                        </button>
+                        {user?.role !== 'guest' && (
+                          <button
+                            className="btn btn-sm d-flex align-items-center gap-1 border-0"
+                            style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
+                            onClick={() => openEdit(v)}
+                          >
+                            <Pencil size={13} /> Modifier
+                          </button>
+                        )}
+                        {user?.role !== 'guest' && (
+                          <button
+                            className="btn btn-sm d-flex align-items-center gap-1 border-0"
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 500,
+                              borderRadius: 8,
+                              backgroundColor: isActif ? "#FBE7E7" : "#E7F5EC",
+                              color: isActif ? "#B3261E" : "#1E7B3A",
+                            }}
+                            onClick={() => toggleStatut(v)}
+                          >
+                            {isActif ? (<><Trash2 size={13} /> Retirer</>) : (<><RotateCcw size={13} /> Restaurer</>)}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

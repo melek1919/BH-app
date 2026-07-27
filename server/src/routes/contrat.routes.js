@@ -7,6 +7,7 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/etablissements/:etablissementId/contrats', controller.getByEtablissement);
+router.get('/contrats/by-police/:numero', controller.getByNumeroPolice);
 router.get('/contrats/:id', controller.getOne);
 
 router.post('/etablissements/:etablissementId/contrats', authorize('contrats'), controller.create);

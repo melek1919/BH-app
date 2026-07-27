@@ -16,6 +16,14 @@ const getOne = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+const getByNumeroPolice = async (req, res, next) => {
+    try {
+        const contrat = await model.findByNumeroPolice(req.params.numero);
+        if (!contrat) return res.status(404).json({ message: 'Contrat introuvable' });
+        res.json(contrat);
+    } catch (err) { next(err); }
+};
+
 const create = async (req, res, next) => {
     const { error, value } = contratSchema.validate(req.body);
     if (error) return res.status(400).json({ message: error.details[0].message });
@@ -45,4 +53,4 @@ const remove = async (req, res, next) => {
     }
 };
 
-export default { getByEtablissement, getOne, create, remove };
+export default { getByEtablissement, getOne, getByNumeroPolice, create, remove };
