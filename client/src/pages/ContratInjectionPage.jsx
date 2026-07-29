@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, Search, Download, Loader2, AlertCircle, CheckCircle2, RefreshCw, Building2, Clock, X, Layers, Car } from "lucide-react";
-import { contratInjectionApi } from "../services/api";
+import { contratInjectionApi, tarificationApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 const NAVY = "#0B1F38";
@@ -57,12 +57,22 @@ export default function ContratsInjectionPage() {
   const [selected, setSelected] = useState(new Set());
   const [injecting, setInjecting] = useState(false);
   const [toast, setToast] = useState(null);
+  const [tarifs, setTarifs] = useState({});
 
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      setContrats(await contratInjectionApi.liste());
+      const data = await contratInjectionApi.liste();
+      setContrats(data);
+      const map = {};
+      await Promise.all(data.map(async (c) => {
+        try {
+          const t = await tarificationApi.calcContratById(c.id);
+          map[c.id] = t.primeTTC;
+        } catch {}
+      }));
+      setTarifs(map);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -240,6 +250,7 @@ export default function ContratsInjectionPage() {
                 <th style={{ fontSize: 11, fontWeight: 600, color: MUTED, textAlign: "left", padding: "14px 8px", textTransform: "uppercase", letterSpacing: 0.3 }}>N° Police</th>
                 <th style={{ fontSize: 11, fontWeight: 600, color: MUTED, textAlign: "left", padding: "14px 8px", textTransform: "uppercase", letterSpacing: 0.3 }}>Validité</th>
                 <th style={{ fontSize: 11, fontWeight: 600, color: MUTED, textAlign: "center", padding: "14px 8px", textTransform: "uppercase", letterSpacing: 0.3 }}>Véhicules</th>
+                <th style={{ fontSize: 11, fontWeight: 600, color: MUTED, textAlign: "right", padding: "14px 16px", textTransform: "uppercase", letterSpacing: 0.3 }}>Prime TTC</th>
                 <th style={{ fontSize: 11, fontWeight: 600, color: MUTED, textAlign: "left", padding: "14px 8px", textTransform: "uppercase", letterSpacing: 0.3 }}>Statut</th>
                 <th style={{ fontSize: 11, fontWeight: 600, color: MUTED, textAlign: "left", padding: "14px 16px", textTransform: "uppercase", letterSpacing: 0.3 }}>Lot</th>
               </tr>
@@ -288,6 +299,15 @@ export default function ContratsInjectionPage() {
                       <span className="d-inline-flex align-items-center gap-1" style={{ fontSize: 12, color: MUTED }}>
                         <Car size={12} /> {c.nb_vehicules}
                       </span>
+                    </td>
+                    <td style={{ padding: "13px 8px", textAlign: "right" }}>
+                      {tarifs[c.id] != null ? (
+                        <span style={{ fontSize: 12, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: "#F3E8FD", color: "#6B3FA0", whiteSpace: "nowrap", fontFamily: "monospace" }}>
+                          {tarifs[c.id].toFixed(2)} DT
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: MUTED }}>...</span>
+                      )}
                     </td>
                     <td style={{ padding: "13px 8px" }}><StatutBadge statut={c.statut_injection} /></td>
                     <td style={{ padding: "13px 16px" }}><LotBadge numero={c.numero_lot} /></td>

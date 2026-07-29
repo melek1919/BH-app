@@ -137,15 +137,15 @@ export const importApi = {
   },
 };
 
+export const tarificationApi = {
+  calcVehicule: (vehicule) =>
+    request("/tarification/vehicule", { method: "POST", body: JSON.stringify(vehicule) }),
+  calcContrat: (vehicules) =>
+    request("/tarification/contrat", { method: "POST", body: JSON.stringify({ vehicules }) }),
+  calcContratById: (contratId) =>
+    request(`/tarification/contrat/${contratId}`),
+};
 
-
-// injecter() reçoit un fichier (blob) en retour, pas du JSON — traitement
-// différent du wrapper `request` habituel : on déclenche le téléchargement
-// directement depuis la réponse.
-// À ajouter dans src/services/api.js.
-// injecter() reçoit un fichier (blob) en retour, pas du JSON — traitement
-// différent du wrapper `request` habituel : on déclenche le téléchargement
-// directement depuis la réponse.
 export const contratInjectionApi = {
   liste: () => request("/contrats-injection/liste"),
 

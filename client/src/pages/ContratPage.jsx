@@ -20,7 +20,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { vehiculesApi } from "../services/api";
+import { vehiculesApi, tarificationApi } from "../services/api";
 import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
 
@@ -42,7 +42,7 @@ function StatusBadge({ statut }) {
   );
 }
 
-const EMPTY_FORM = { immatriculation: "", usage: "", marque: "", type_vehicule: "", numero_serie: "", bonus_malus: "", puissance: "", nb_places: "", dmc: "" };
+const EMPTY_FORM = { immatriculation: "", usage: "", marque: "", type_vehicule: "", numero_serie: "", bonus_malus: "", puissance: "", nb_places: "", dmc: "", ptac: "", pvid: "" };
 
 // Modale unique ajout/modification — pas de champ établissement (le contrat fixe déjà le contexte).
 // Reste ouverte après un ajout réussi, comme sur VehiculesPage.
@@ -69,6 +69,9 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
     if (!form.nb_places) nextErrors.nb_places = "Champ requis";
     else if (!/^[0-9]+$/.test(form.nb_places)) nextErrors.nb_places = "Doit être un nombre";
     if (form.puissance && !/^[0-9]+$/.test(form.puissance)) nextErrors.puissance = "Doit être un nombre";
+    if (!form.usage) nextErrors.usage = "Champ requis";
+    const ptacRequired = form.usage === "VEHICULES COMMERC. PLUS DE 3.5 T (U2)" || form.usage === "REMORQUES AGRICOLES PLUS DE 3.5 T";
+    if (ptacRequired && !form.ptac) nextErrors.ptac = "PTAC requis pour cet usage";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     onSubmit(form);
@@ -142,6 +145,20 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Mise en circulation</label>
         <input type="date" className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.dmc || ""} onChange={update("dmc")} />
 
+        <div className="row g-2">
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>
+              PTAC {form.usage === "VEHICULES COMMERC. PLUS DE 3.5 T (U2)" || form.usage === "REMORQUES AGRICOLES PLUS DE 3.5 T" ? "*" : ""}
+            </label>
+            <input className="form-control" type="number" step="0.01" style={{ fontSize: 13, borderColor: errors.ptac ? "#B3261E" : BORDER }} value={form.ptac || ""} onChange={update("ptac")} placeholder="0.00" />
+            {errors.ptac && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.ptac}</p>}
+          </div>
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>PVID</label>
+            <input className="form-control" type="number" step="0.01" style={{ fontSize: 13, borderColor: BORDER }} value={form.pvid || ""} onChange={update("pvid")} placeholder="0.00" />
+          </div>
+        </div>
+
         <div className="d-flex gap-2 mt-4">
           <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
           <button className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2" style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }} onClick={handleSubmit} disabled={submitting}>
@@ -152,6 +169,89 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
       </div>
     </div>
   );
+}
+
+// ---------------------------------------------------------------
+// Modale détail tarification
+// ---------------------------------------------------------------
+function TarificationDetailModal({ data, onClose }) {
+  const { vehicule, detail } = data;
+  const tag = USAGE_TAG(vehicule.usage);
+  const f = (n) => (n != null ? Number(n).toFixed(2) : "—");
+
+  return (
+    <div
+      className="d-flex align-items-center justify-content-center"
+      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.4)", zIndex: 70, backdropFilter: "blur(2px)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-4 modal-pop" style={{ width: 430, maxWidth: "92vw", padding: 0, boxShadow: "0 16px 48px rgba(11,31,56,0.25)" }}>
+        {/* Header minimal */}
+        <div className="d-flex align-items-center justify-content-between px-3" style={{ paddingTop: 14, paddingBottom: 14, borderBottom: `1px solid ${BORDER}` }}>
+          <div className="d-flex align-items-center gap-2">
+            <span className="d-flex align-items-center justify-content-center rounded-2" style={{ width: 30, height: 30, backgroundColor: "#F3E8FD" }}>
+              <Car size={14} color="#6B3FA0" />
+            </span>
+            <span className="fw-semibold" style={{ fontSize: 14, color: "#161B22" }}>{vehicule.immatriculation || "Véhicule"}</span>
+          </div>
+          <button className="btn btn-sm border-0 p-0" onClick={onClose}><X size={16} color={MUTED} /></button>
+        </div>
+
+        {/* Infos véhicule — ligne compacte */}
+        <div className="d-flex flex-wrap gap-1 px-3" style={{ paddingTop: 10, paddingBottom: 8, borderBottom: `1px solid ${BORDER}` }}>
+          <Chip label={vehicule.marque || "—"} />
+          <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 20, backgroundColor: tag.bg, color: tag.fg }}>{vehicule.usage || "—"}</span>
+          <Chip label={vehicule.puissance ? `${vehicule.puissance} CV` : "—"} />
+          <Chip label={`${vehicule.nb_places ?? "—"} pl.`} />
+          {vehicule.ptac ? <Chip label={`PTAC ${vehicule.ptac} t`} /> : null}
+        </div>
+
+        {/* Détail des primes — tout en une seule liste */}
+        <div style={{ padding: "8px 12px 4px" }}>
+          <div className="rounded-2" style={{ border: `1px solid ${BORDER}` }}>
+            <Row label="Variable (RC base)" value={detail.variable} />
+            <Row label="RC" value={detail.RC} />
+            <Row label="FGA" value={detail.FGA} />
+            <Row label="CFFGA" value={detail.CFFGA} />
+            <Row label="FSSR" value={detail.FSSR} />
+            <Row label="FPAC" value={detail.FPAC} />
+            <Row label="Frais d'adhésion" value={detail.fraisAdhesion} />
+            <Row label="Défense & Recours" value={detail.DR} />
+            <Row label="TUA" value={detail.TUA} />
+            <Row label="Total sans PTA" value={detail.totalSansPTA} bold />
+          </div>
+
+          {/* PTA */}
+          <div className="rounded-2 mt-1" style={{ border: `1px solid ${BORDER}` }}>
+            <Row label={`Prime PTA (2 × ${vehicule.nb_places || 0} pl.)`} value={detail.primePTA} />
+            <Row label="TUA / PTA" value={detail.TUA_PTA} />
+          </div>
+        </div>
+
+        {/* Prime nette totale — badge en bas */}
+        <div className="px-3" style={{ paddingTop: 6, paddingBottom: 14 }}>
+          <div className="rounded-2 text-center" style={{ padding: "6px 0", background: "linear-gradient(135deg, #F3E8FD 0%, #EDE4F7 100%)" }}>
+            <span style={{ fontSize: 11, color: "#6B3FA0", fontWeight: 500 }}>Prime nette totale : </span>
+            <span style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#6B3FA0" }}>{f(detail.primeNetteTotale)} DT</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, bold }) {
+  const f = (n) => (n != null ? Number(n).toFixed(2) : "—");
+  return (
+    <div className="d-flex align-items-center justify-content-between px-2" style={{ paddingTop: 4, paddingBottom: 4, borderBottom: "1px solid #F0F2F5" }}>
+      <span style={{ fontSize: 12, color: MUTED }}>{label}</span>
+      <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: bold ? 600 : 400, color: "#161B22" }}>{f(value)} DT</span>
+    </div>
+  );
+}
+
+function Chip({ label }) {
+  return <span style={{ fontSize: 11, color: MUTED, padding: "2px 8px", borderRadius: 20, backgroundColor: "#F5F6F8" }}>{label}</span>;
 }
 
 // ---------------------------------------------------------------
@@ -166,18 +266,22 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [statutFilter, setStatutFilter] = useState("actif");
+  const [tarif, setTarif] = useState(null);
 
   const [modalMode, setModalMode] = useState(null); // "create" | "edit" | null
   const [editingVehicule, setEditingVehicule] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
   const [toast, setToast] = useState(null);
+  const [tarifVehicule, setTarifVehicule] = useState(null);
 
   const loadVehicules = async () => {
     setLoading(true);
     setError(null);
     try {
-      setVehicules(await vehiculesApi.getByContrat(contrat.id));
+      const data = await vehiculesApi.getByContrat(contrat.id);
+      setVehicules(data);
+      tarificationApi.calcContrat(data).then(setTarif).catch(() => {});
     } catch (err) {
       setError(err.message);
     } finally {
@@ -230,10 +334,14 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
     immatriculation: form.immatriculation,
     usage: form.usage,
     marque: form.marque || null,
+    type_vehicule: form.type_vehicule || null,
     numero_serie: form.numero_serie || null,
+    bonus_malus: form.bonus_malus ? Number(form.bonus_malus) : null,
     puissance: form.puissance ? Number(form.puissance) : null,
     nb_places: Number(form.nb_places),
     dmc: form.dmc || null,
+    ptac: form.ptac ? Number(form.ptac) : null,
+    pvid: form.pvid ? Number(form.pvid) : null,
   });
 
   const openCreate = () => { setEditingVehicule(null); setJustCreated(false); setModalMode("create"); };
@@ -321,6 +429,16 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               </span>
               <span style={{ fontSize: 12.5, fontWeight: 500, color: echeanceProche ? "#A15C00" : "#1E7B3A" }}>
                 {stats.joursRestants == null ? "—" : stats.joursRestants < 0 ? "Contrat expiré" : echeanceProche ? `Échéance dans ${stats.joursRestants}j` : "En cours"}
+              </span>
+            </div>
+
+            <div className="d-flex align-items-center gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${BORDER}` }}>
+              <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 28, height: 28, backgroundColor: "#F3E8FD", flexShrink: 0 }}>
+                <FileText size={13} color="#6B3FA0" />
+              </span>
+              <span style={{ fontSize: 12.5, color: "#161B22" }}>
+                <span style={{ color: MUTED }}>Prime TTC : </span>
+                <span className="fw-semibold">{tarif ? `${tarif.primeTTC.toFixed(2)} DT` : "..."}</span>
               </span>
             </div>
           </div>
@@ -437,7 +555,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Usage</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "center", padding: "12px 8px" }}>Puissance</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "center", padding: "12px 8px" }}>Places</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Statut</th>
+                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "right", padding: "12px 16px" }}>Total</th>
                 <th style={{ padding: "12px 16px" }}></th>
               </tr>
             </thead>
@@ -445,16 +563,22 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               {filtered.map((v) => {
                 const tag = USAGE_TAG(v.usage);
                 const isActif = v.statut_retrait === "actif";
+                const detail = tarif?.details?.find((d) => d.immatriculation === v.immatriculation);
                 return (
                   <tr
                     key={v.id}
-                    style={{ borderBottom: "1px solid " + BORDER, transition: "background-color 0.15s ease" }}
+                    style={{ borderBottom: "1px solid " + BORDER, transition: "background-color 0.15s ease", cursor: detail ? "pointer" : "default" }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#FAFBFC")}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                    onClick={() => detail && setTarifVehicule({ vehicule: v, detail })}
                   >
                     <td style={{ padding: "12px 16px" }}>
                       <div className="d-flex align-items-center gap-2">
-                        <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 34, height: 34, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
+                        <span
+                          className="d-flex align-items-center justify-content-center rounded-3"
+                          style={{ width: 34, height: 34, backgroundColor: "#EEF2F7", flexShrink: 0 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Car size={15} color={NAVY} />
                         </span>
                         <div>
@@ -474,8 +598,14 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                     <td style={{ padding: "12px 8px", fontSize: 12.5, textAlign: "center", color: MUTED }}>
                       {v.nb_places ?? "—"}
                     </td>
-                    <td style={{ padding: "12px 8px" }}>
-                      <StatusBadge statut={v.statut_retrait} />
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      {detail ? (
+                        <span style={{ fontSize: 12, fontWeight: 500, padding: "4px 12px", borderRadius: 20, backgroundColor: "#F3E8FD", color: "#6B3FA0", whiteSpace: "nowrap", fontFamily: "monospace" }}>
+                          {detail.totalSansPTA.toFixed(2)} DT
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: MUTED }}>—</span>
+                      )}
                     </td>
                     <td style={{ padding: "12px 16px" }}>
                       <div className="d-flex align-items-center gap-2 justify-content-end">
@@ -483,7 +613,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                           <button
                             className="btn btn-sm d-flex align-items-center gap-1 border-0"
                             style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
-                            onClick={() => openEdit(v)}
+                            onClick={(e) => { e.stopPropagation(); openEdit(v); }}
                           >
                             <Pencil size={13} /> Modifier
                           </button>
@@ -498,7 +628,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                               backgroundColor: isActif ? "#FBE7E7" : "#E7F5EC",
                               color: isActif ? "#B3261E" : "#1E7B3A",
                             }}
-                            onClick={() => toggleStatut(v)}
+                            onClick={(e) => { e.stopPropagation(); toggleStatut(v); }}
                           >
                             {isActif ? (<><Trash2 size={13} /> Retirer</>) : (<><RotateCcw size={13} /> Restaurer</>)}
                           </button>
@@ -512,6 +642,13 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
           </table>
         )}
       </div>
+
+      {tarifVehicule && (
+        <TarificationDetailModal
+          data={tarifVehicule}
+          onClose={() => setTarifVehicule(null)}
+        />
+      )}
 
       {modalMode && (
         <VehiculeModal

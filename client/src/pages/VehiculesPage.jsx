@@ -20,6 +20,8 @@ const EMPTY_FORM = {
   puissance: "",
   nb_places: "",
   dmc: "",
+  ptac: "",
+  pvid: "",
 };
 
 // Modale unique pour ajout ET modification — le mode change juste le titre,
@@ -50,6 +52,9 @@ function VehiculeModal({ mode = "create", initialData, onClose, onSubmit, submit
     if (!form.nb_places) nextErrors.nb_places = "Champ requis";
     else if (!/^[0-9]+$/.test(form.nb_places)) nextErrors.nb_places = "Doit être un nombre";
     if (form.puissance && !/^[0-9]+$/.test(form.puissance)) nextErrors.puissance = "Doit être un nombre";
+    if (!form.usage) nextErrors.usage = "Champ requis";
+    const ptacRequired = form.usage === "VEHICULES COMMERC. PLUS DE 3.5 T (U2)" || form.usage === "REMORQUES AGRICOLES PLUS DE 3.5 T";
+    if (ptacRequired && !form.ptac) nextErrors.ptac = "PTAC requis pour cet usage";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
 
@@ -155,6 +160,20 @@ function VehiculeModal({ mode = "create", initialData, onClose, onSubmit, submit
 
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>Date mise en circulation</label>
         <input type="date" className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.dmc || ""} onChange={update("dmc")} />
+
+        <div className="row g-2">
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>
+              PTAC {form.usage === "VEHICULES COMMERC. PLUS DE 3.5 T (U2)" || form.usage === "REMORQUES AGRICOLES PLUS DE 3.5 T" ? "*" : ""}
+            </label>
+            <input className="form-control" type="number" step="0.01" style={{ fontSize: 13, borderColor: errors.ptac ? "#B3261E" : BORDER }} value={form.ptac || ""} onChange={update("ptac")} placeholder="0.00" />
+            {errors.ptac && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.ptac}</p>}
+          </div>
+          <div className="col-6">
+            <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "10px 0 4px" }}>PVID</label>
+            <input className="form-control" type="number" step="0.01" style={{ fontSize: 13, borderColor: BORDER }} value={form.pvid || ""} onChange={update("pvid")} placeholder="0.00" />
+          </div>
+        </div>
 
         <div className="d-flex gap-2 mt-4">
           <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>
@@ -392,6 +411,8 @@ export default function VehiculesPage() {
     puissance: form.puissance ? Number(form.puissance) : null,
     nb_places: Number(form.nb_places),
     dmc: form.dmc || null,
+    ptac: form.ptac ? Number(form.ptac) : null,
+    pvid: form.pvid ? Number(form.pvid) : null,
   });
 
   const openCreate = () => {

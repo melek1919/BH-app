@@ -6,6 +6,7 @@ import contratRoutes from './routes/contrat.routes.js';
 import importRoutes from './routes/import.routes.js';
 import contratInjectionRoutes from './routes/Contratinjection.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import tarificationRoutes from './routes/tarification.routes.js';
 import utilisateurRoutes from './routes/utilisateur.routes.js';
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 // Protégées (authentification + rôles gérés dans chaque fichier de routes)
+app.use('/api/tarification', tarificationRoutes);
 app.use('/api/utilisateurs', utilisateurRoutes);
 app.use('/api/etablissements', etablissementRoutes);
 app.use('/api/vehicules', vehiculeRoutes);
