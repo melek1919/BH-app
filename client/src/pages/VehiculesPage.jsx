@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
 import Pagination from "../components/Pagination";
+import SortBar from "../components/SortBar";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -77,7 +78,7 @@ function VehiculeModal({ mode = "create", initialData, onClose, onSubmit, submit
       style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 50 }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 420, maxWidth: "92vw" }}>
+      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 420, maxWidth: "92vw", maxHeight: "calc(100vh - 40px)", overflowY: "auto" }}>
         <div className="d-flex align-items-center justify-content-between mb-3">
           <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>
             {mode === "edit" ? "Modifier le véhicule" : "Ajouter un véhicule"}
@@ -261,7 +262,7 @@ function ImportVehiculesModal({ onClose, onImported }) {
           Colonnes attendues : N° Police, Immatriculation, Usage, Type, N° Série, Bonus Malus, Marque, Puissance, PVID, PTAC, Nb Places, Date Mise en Circulation.
         </p>
 
-        {error && (
+      {error && (
           <div className="d-flex align-items-center gap-2 p-2 rounded-3 mb-3" style={{ background: "#FBE7E7", color: "#B3261E", fontSize: 12.5 }}>
             <AlertCircle size={15} /> {error}
           </div>
@@ -369,6 +370,8 @@ export default function VehiculesPage() {
   const [justCreated, setJustCreated] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
   const PER_PAGE = 40;
 
   const loadData = async () => {
@@ -391,7 +394,7 @@ export default function VehiculesPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return vehicules.filter((v) => {
+    let list = vehicules.filter((v) => {
       const matchesSearch = !q || 
         (v.immatriculation || "").toLowerCase().includes(q) ||
         (v.marque || "").toLowerCase().includes(q) ||
@@ -401,7 +404,23 @@ export default function VehiculesPage() {
       const matchesMarque = !marqueFilter || (v.marque || "").toLowerCase() === marqueFilter.toLowerCase();
       return matchesSearch && matchesEtablissement && matchesMarque;
     });
-  }, [vehicules, search, etablissementFilter, marqueFilter]);
+    list.sort((a, b) => {
+      if (sortKey === "immatriculation") {
+        const va = (a.immatriculation || "").toLowerCase();
+        const vb = (b.immatriculation || "").toLowerCase();
+        return sortDir === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+      }
+      if (sortKey === "puissance") {
+        const va = Number(a.puissance) || 0;
+        const vb = Number(b.puissance) || 0;
+        return sortDir === "asc" ? va - vb : vb - va;
+      }
+      const va = new Date(a[sortKey] || 0).getTime();
+      const vb = new Date(b[sortKey] || 0).getTime();
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+    return list;
+  }, [vehicules, search, etablissementFilter, marqueFilter, sortKey, sortDir]);
 
   useEffect(() => { setPage(1); }, [filtered.length]);
 
@@ -535,6 +554,17 @@ export default function VehiculesPage() {
               </button>
             ))}
           </div>
+
+          <SortBar
+            options={[
+              { key: "created_at", label: "Date" },
+              { key: "immatriculation", label: "Alphabétique" },
+              { key: "puissance", label: "Puissance" },
+            ]}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onChange={(k, d) => { setSortKey(k); setSortDir(d); }}
+          />
         </div>
 
         <span style={{ fontSize: 12.5, color: MUTED }}>

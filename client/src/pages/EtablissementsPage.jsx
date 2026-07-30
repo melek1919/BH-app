@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { etablissementsApi, contratsApi, importApi } from "../services/api";
 import Pagination from "../components/Pagination";
+import SortBar from "../components/SortBar";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -540,6 +541,8 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
   const PER_PAGE = 20;
 
   const loadData = async () => {
@@ -564,14 +567,21 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return etablissements.filter((e) => {
+    let list = etablissements.filter((e) => {
       const matchesSearch = !q || e.nom.toLowerCase().includes(q) || (e.identifiant_unique || "").toLowerCase().includes(q) || (e.gouvernorat || "").toLowerCase().includes(q);
       const matchesGouvernorat = !gouvernoratFilter || e.gouvernorat === gouvernoratFilter;
       const hasContrats = (e.nb_contrats || 0) > 0;
       const matchesContrats = !contratsFilter || (contratsFilter === "avec" ? hasContrats : !hasContrats);
       return matchesSearch && matchesGouvernorat && matchesContrats;
     });
-  }, [etablissements, search, gouvernoratFilter, contratsFilter]);
+    list.sort((a, b) => {
+      let va = sortKey === "nom" ? (a.nom || "").toLowerCase() : new Date(a[sortKey] || 0).getTime();
+      let vb = sortKey === "nom" ? (b.nom || "").toLowerCase() : new Date(b[sortKey] || 0).getTime();
+      if (sortKey === "nom") return sortDir === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+    return list;
+  }, [etablissements, search, gouvernoratFilter, contratsFilter, sortKey, sortDir]);
 
   useEffect(() => { setPage(1); }, [filtered.length]);
 
@@ -641,6 +651,16 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
             <option value="avec">Avec contrats</option>
             <option value="sans">Sans contrats</option>
           </select>
+
+          <SortBar
+            options={[
+              { key: "created_at", label: "Date" },
+              { key: "nom", label: "Alphabétique" },
+            ]}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onChange={(k, d) => { setSortKey(k); setSortDir(d); }}
+          />
         </div>
         <span style={{ fontSize: 12.5, color: MUTED }}>{loading ? "Chargement..." : `${filtered.length} établissement${filtered.length > 1 ? "s" : ""}`}</span>
       </div>

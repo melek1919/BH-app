@@ -27,6 +27,7 @@ import { vehiculesApi, tarificationApi, tokenStorage, API_BASE } from "../servic
 import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
 import Pagination from "../components/Pagination";
+import SortBar from "../components/SortBar";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -282,6 +283,8 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
   const [toast, setToast] = useState(null);
   const [tarifVehicule, setTarifVehicule] = useState(null);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
   const PER_PAGE = 30;
 
   const loadVehicules = async () => {
@@ -308,12 +311,35 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return vehicules.filter((v) => {
+    let list = vehicules.filter((v) => {
       const matchesSearch = !q || (v.immatriculation || "").toLowerCase().includes(q) || (v.marque || "").toLowerCase().includes(q);
       const matchesStatut = !statutFilter || v.statut_retrait === statutFilter;
       return matchesSearch && matchesStatut;
     });
-  }, [vehicules, search, statutFilter]);
+    list.sort((a, b) => {
+      if (sortKey === "immatriculation") {
+        const va = (a.immatriculation || "").toLowerCase();
+        const vb = (b.immatriculation || "").toLowerCase();
+        return sortDir === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+      }
+      if (sortKey === "puissance") {
+        const va = Number(a.puissance) || 0;
+        const vb = Number(b.puissance) || 0;
+        return sortDir === "asc" ? va - vb : vb - va;
+      }
+      if (sortKey === "primeTTC") {
+        const da = tarif?.details?.find((d) => d.immatriculation === a.immatriculation);
+        const db = tarif?.details?.find((d) => d.immatriculation === b.immatriculation);
+        const va = da ? da.totalAvecPTA : 0;
+        const vb = db ? db.totalAvecPTA : 0;
+        return sortDir === "asc" ? va - vb : vb - va;
+      }
+      const va = new Date(a[sortKey] || 0).getTime();
+      const vb = new Date(b[sortKey] || 0).getTime();
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+    return list;
+  }, [vehicules, search, statutFilter, sortKey, sortDir, tarif]);
 
   useEffect(() => { setPage(1); }, [filtered.length]);
 
@@ -577,6 +603,18 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               </button>
             ))}
           </div>
+
+          <SortBar
+            options={[
+              { key: "created_at", label: "Date" },
+              { key: "immatriculation", label: "Alphabétique" },
+              { key: "puissance", label: "Puissance" },
+              { key: "primeTTC", label: "Prime TTC" },
+            ]}
+            sortKey={sortKey}
+            sortDir={sortDir}
+            onChange={(k, d) => { setSortKey(k); setSortDir(d); }}
+          />
         </div>
         <div className="d-flex gap-2">
           {user?.role !== 'guest' && (

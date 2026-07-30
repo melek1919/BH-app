@@ -3,6 +3,7 @@ import { FileText, Search, Download, Loader2, AlertCircle, CheckCircle2, Refresh
 import { contratInjectionApi, tarificationApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import Pagination from "../components/Pagination";
+import SortBar from "../components/SortBar";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -48,6 +49,8 @@ export default function ContratsInjectionPage() {
   const [toast, setToast] = useState(null);
   const [tarifs, setTarifs] = useState({});
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
   const PER_PAGE = 20;
 
   const loadData = async () => {
@@ -82,12 +85,32 @@ export default function ContratsInjectionPage() {
   const filtered = useMemo(() => {
     let list = contrats;
     if (statutFilter !== "tous") list = list.filter((c) => c.statut_injection === statutFilter);
-    if (!search.trim()) return list;
-    const q = search.toLowerCase();
-    return list.filter(
-      (c) => (c.numero_police || "").toLowerCase().includes(q) || (c.etablissement_nom || "").toLowerCase().includes(q)
-    );
-  }, [contrats, search, statutFilter]);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (c) => (c.numero_police || "").toLowerCase().includes(q) || (c.etablissement_nom || "").toLowerCase().includes(q)
+      );
+    }
+    list.sort((a, b) => {
+      if (sortKey === "numero_police") {
+        const va = (a.numero_police || "").toLowerCase();
+        const vb = (b.numero_police || "").toLowerCase();
+        return sortDir === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (va < vb ? 1 : va > vb ? -1 : 0);
+      }
+      if (sortKey === "nb_vehicules") {
+        return sortDir === "asc" ? (a.nb_vehicules || 0) - (b.nb_vehicules || 0) : (b.nb_vehicules || 0) - (a.nb_vehicules || 0);
+      }
+      if (sortKey === "primeTTC") {
+        const va = tarifs[a.id] || 0;
+        const vb = tarifs[b.id] || 0;
+        return sortDir === "asc" ? va - vb : vb - va;
+      }
+      const va = new Date(a[sortKey] || 0).getTime();
+      const vb = new Date(b[sortKey] || 0).getTime();
+      return sortDir === "asc" ? va - vb : vb - va;
+    });
+    return list;
+  }, [contrats, search, statutFilter, sortKey, sortDir, tarifs]);
 
   // Seuls les contrats pas encore "injecte" peuvent être (ré)injectés —
   // un contrat déjà injecté ne peut pas être sélectionné à nouveau tant
@@ -151,29 +174,21 @@ export default function ContratsInjectionPage() {
 
   return (
     <div style={{ paddingBottom: selected.size > 0 ? 76 : 0 }}>
-      {/* En-tête avec liseré dégradé, cohérent avec ContratPage */}
-      <div className="rounded-4 p-4 mb-4 position-relative overflow-hidden" style={{ backgroundColor: "#fff", border: `1px solid ${BORDER}`, boxShadow: "0 1px 2px rgba(11,31,56,0.04)" }}>
-        <div className="position-absolute top-0 start-0 w-100" style={{ height: 3, background: "linear-gradient(90deg, #0B1F38 0%, #2B6CB0 50%, #B8912E 100%)" }} />
-
-        <div className="row g-3">
-          {STAT_CARDS.map((s) => (
-            <div className="col-4" key={s.key}>
-              <button
-                className="rounded-3 p-3 w-100 text-start border-0 h-100"
-                style={{ backgroundColor: statutFilter === s.key ? "#FAFBFC" : "#fff", border: `1px solid ${statutFilter === s.key ? NAVY : BORDER}`, transition: "border-color .15s" }}
-                onClick={() => setStatutFilter(statutFilter === s.key ? "tous" : s.key)}
-              >
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 26, height: 26, backgroundColor: s.iconBg }}>
-                    <s.icon size={13} color={s.iconFg} />
-                  </span>
-                  <span style={{ fontSize: 11, color: MUTED }}>{s.label}</span>
-                </div>
+      {/* Trois cartes KPI séparées */}
+      <div className="row g-3 mb-4">
+        {STAT_CARDS.map((s) => (
+          <div className="col-4" key={s.key}>
+            <div className="d-flex flex-column gap-2 p-3 rounded-4" style={{ backgroundColor: "#fff", border: `1px solid ${s.key === "a_injecter" ? "#E4E8EE" : s.key === "a_reinjecter" ? "#E4E8EE" : "#E4E8EE"}`, cursor: "pointer", transition: "box-shadow 0.15s ease", boxShadow: statutFilter === s.key ? `0 0 0 2px ${NAVY}` : "0 1px 2px rgba(11,31,56,0.04)" }} onClick={() => setStatutFilter(statutFilter === s.key ? "tous" : s.key)}>
+              <div className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 36, height: 36, backgroundColor: s.iconBg, alignSelf: "flex-start" }}>
+                <s.icon size={18} color={s.iconFg} strokeWidth={2} />
+              </div>
+              <div>
                 <p className="mb-0 fw-bold" style={{ fontSize: 24, color: "#161B22" }}>{s.value}</p>
-              </button>
+                <p className="mb-0" style={{ fontSize: 12.5, color: MUTED }}>{s.label}</p>
+              </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
 
       {toast && (
@@ -205,6 +220,18 @@ export default function ContratsInjectionPage() {
             </button>
           )}
         </div>
+
+        <SortBar
+          options={[
+            { key: "created_at", label: "Date" },
+            { key: "numero_police", label: "Alphabétique" },
+            { key: "nb_vehicules", label: "Nb véhicules" },
+            { key: "primeTTC", label: "Prime TTC" },
+          ]}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onChange={(k, d) => { setSortKey(k); setSortDir(d); }}
+        />
 
         <span style={{ fontSize: 12.5, color: MUTED }}>
           {loading ? "Chargement..." : `${filtered.length} contrat${filtered.length > 1 ? "s" : ""}`}

@@ -1,19 +1,26 @@
-import { LayoutDashboard, Building2, Car, FileStack, ChevronRight, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, Car, FileStack, ChevronRight, LogOut, UserCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import logo from "../../assets/bh-logo.png"; // ajuste le chemin selon l'emplacement réel
 
-const NAV_ITEMS = [
-  { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "etablissements", label: "Établissements", icon: Building2 },
-  { key: "vehicules", label: "Véhicules", icon: Car },
-  { key: "contrats-injection", label: "Contrats", icon: FileStack },
-];
+const NAV_ITEMS = (role) => {
+  const items = [
+    { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { key: "etablissements", label: "Établissements", icon: Building2 },
+    { key: "vehicules", label: "Véhicules", icon: Car },
+    { key: "contrats-injection", label: "Contrats", icon: FileStack },
+  ];
+  if (role === "admin") {
+    items.push({ key: "utilisateurs", label: "Utilisateurs", icon: UserCircle });
+  }
+  return items;
+};
 
 const TITLES = {
   dashboard: "Dashboard",
   etablissements: "Établissements",
   vehicules: "Véhicules",
   "contrats-injection": "Contrats",
+  utilisateurs: "Utilisateurs",
 };
 
 const SUBTITLES = {
@@ -21,6 +28,7 @@ const SUBTITLES = {
   etablissements: "Gestion des établissements publics",
   vehicules: "Parc automobile des établissements",
   "contrats-injection": "Sélection et injection des contrats dans le SI",
+  utilisateurs: "Gestion des comptes agents",
 };
 
 // Couleurs de marque (Bootstrap n'a pas ces teintes par défaut)
@@ -65,7 +73,7 @@ export default function SidebarLayout({ active, onNavigate, children }) {
         </div>
 
         <nav className="flex-grow-1 d-flex flex-column gap-1">
-          {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
+          {NAV_ITEMS(user?.role).map(({ key, label, icon: Icon }) => {
             const isActive = active === key;
             return (
               <button

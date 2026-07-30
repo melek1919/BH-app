@@ -8,6 +8,7 @@ router.use(authenticate);
 router.post("/vehicule", controller.calculerVehicule);
 router.post("/contrat", controller.calculerContrat);
 router.get("/contrat/:id", controller.calculerContratById);
-router.get("/contrat/:id/export", controller.exporterContrat); // <-- nouveau : téléchargement xlsx
+router.get("/contrat/:id/export", controller.exporterContrat);
+router.get("/top", controller.getTop);
 
 export default router;

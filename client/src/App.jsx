@@ -8,9 +8,10 @@ import EtablissementsPage from "./pages/EtablissementsPage";
 import ContratPage from "./pages/ContratPage";
 import VehiculesPage from "./pages/VehiculesPage";
 import ContratsInjectionPage from "./pages/ContratInjectionPage";
+import UsersPage from "./pages/UsersPage";
 
 function App() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const [active, setActive] = useState("dashboard");
   // { etablissement, contrat } quand on consulte la fiche d'un contrat, sinon null
   const [openContrat, setOpenContrat] = useState(null);
@@ -69,6 +70,7 @@ function App() {
         );
       case "vehicules": return <VehiculesPage />;
       case "contrats-injection": return <ContratsInjectionPage />;
+      case "utilisateurs": return user?.role === "admin" ? <UsersPage /> : <DashboardPage />;
       default: return null;
     }
   };

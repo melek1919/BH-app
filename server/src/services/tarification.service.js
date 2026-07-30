@@ -43,7 +43,7 @@ function getVariable(vehicule) {
     if (p >= 3 && p <= 4) return 110;
     if (p >= 5 && p <= 6) return 140;
     if (p >= 7 && p <= 10) return 170;
-    if (p >= 11 && p <= 14) return 220;
+    if (p >= 11 && p <= 14) return 220; 
     if (p >= 15) return 264;
   }
 

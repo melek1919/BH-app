@@ -146,6 +146,8 @@ export const tarificationApi = {
     request("/tarification/contrat", { method: "POST", body: JSON.stringify({ vehicules }) }),
   calcContratById: (contratId) =>
     request(`/tarification/contrat/${contratId}`),
+  getTop: () =>
+    request("/tarification/top"),
 };
 
 export const contratInjectionApi = {
@@ -192,4 +194,13 @@ export const authApi = {
   register: (data) =>
     request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
   me: () => request("/auth/me"),
+};
+
+export const utilisateurApi = {
+  getAll: () => request("/utilisateurs"),
+  getOne: (id) => request(`/utilisateurs/${id}`),
+  create: (data) => request("/utilisateurs", { method: "POST", body: JSON.stringify(data) }),
+  update: (id, data) => request(`/utilisateurs/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  desactiver: (id) => request(`/utilisateurs/${id}/desactiver`, { method: "PUT" }),
+  activer: (id) => request(`/utilisateurs/${id}/activer`, { method: "PUT" }),
 };

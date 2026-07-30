@@ -1,25 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, Car, AlertTriangle, Archive, ArrowUpRight, Loader2, AlertCircle, FileText, BarChart3, PieChart as PieChartIcon, Hash, Tag } from "lucide-react";
+import { Building2, Car, AlertTriangle, Archive, ArrowUpRight, Loader2, AlertCircle, FileText, BarChart3, TrendingUp, Trophy, DollarSign, Plus, MinusCircle, Clock } from "lucide-react";
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
   XAxis,
   YAxis,
   CartesianGrid,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as RechartsTooltip,
 } from "recharts";
-import { etablissementsApi, contratsApi, vehiculesApi } from "../services/api";
+import { etablissementsApi, contratsApi, vehiculesApi, tarificationApi } from "../services/api";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
 const BORDER = "#E4E8EE";
-
-const GOUV_COLORS = ["#0B1F38", "#2B6CB0", "#B8912E", "#1E7B3A", "#A15C00", "#B3261E", "#6B7684"];
-const BRAND_COLORS = ["#2B6CB0", "#1E7B3A", "#B8912E", "#A15C00", "#B3261E", "#6B7684", "#0B1F38", "#C05A2E"];
 
 function Panel({ title, action, children }) {
   return (
@@ -33,8 +30,7 @@ function Panel({ title, action, children }) {
   );
 }
 
-function KpiCard({ icon: Icon, label, value, bg, fg, sub }) {
-  return (
+function KpiCard({ icon: Icon, label, value, bg, fg, sub }) {  return (
     <div className="d-flex flex-column gap-2 p-3 rounded-4 bg-white" style={{ border: `1px solid ${BORDER}` }}>
       <div className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 36, height: 36, backgroundColor: bg }}>
         <Icon size={18} color={fg} strokeWidth={2} />
@@ -57,7 +53,18 @@ function ChartTooltip({ active, payload, label }) {
   return (
     <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, boxShadow: "0 2px 8px rgba(15,31,56,0.08)" }}>
       <p className="mb-0" style={{ color: MUTED }}>{label}</p>
-      <p className="mb-0 fw-semibold" style={{ color: NAVY }}>{payload[0].value}</p>
+      <p className="mb-0 fw-semibold" style={{ color: NAVY }}>{Number(payload[0].value).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DT</p>
+    </div>
+  );
+}
+
+function PieTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, boxShadow: "0 2px 8px rgba(15,31,56,0.08)" }}>
+      <p className="mb-0 fw-semibold" style={{ color: NAVY }}>{d.name}</p>
+      <p className="mb-0" style={{ color: MUTED }}>{d.value} véhicules · {d.pct}%</p>
     </div>
   );
 }
@@ -73,24 +80,26 @@ export default function DashboardPage() {
   const [error, setError] = useState(null);
 
   const [etablissements, setEtablissements] = useState([]);
-  const [contratsAll, setContratsAll] = useState([]); // { id, numero_police, validite_au, created_at, etablissementNom }
+  const [contratsAll, setContratsAll] = useState([]);
   const [vehiculesActifs, setVehiculesActifs] = useState([]);
   const [vehiculesRetires, setVehiculesRetires] = useState([]);
+  const [topData, setTopData] = useState(null);
 
   const loadAll = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [etabs, actifs, retires] = await Promise.all([
+      const [etabs, actifs, retires, top] = await Promise.all([
         etablissementsApi.getAll(),
         vehiculesApi.getAll(),
         vehiculesApi.getRetires(),
+        tarificationApi.getTop().catch(() => null),
       ]);
       setEtablissements(etabs);
       setVehiculesActifs(actifs);
       setVehiculesRetires(retires);
+      setTopData(top);
 
-      // Pas de route GET /api/contrats global : on agrège établissement par établissement.
       const contratsParEtab = await Promise.all(
         etabs.map((e) =>
           contratsApi.getByEtablissement(e.id).then((list) =>
@@ -120,79 +129,65 @@ export default function DashboardPage() {
     const nouveauxEtabsMois = etablissements.filter((e) => isSameMonth(e.created_at, now)).length;
     const nouveauxVehiculesMois = vehiculesActifs.filter((v) => isSameMonth(v.created_at, now)).length;
 
-    // --- Top établissements par nombre de véhicules
+    // --- Top 3 établissements par flotte assurée
     const contratById = Object.fromEntries(contratsAll.map((c) => [c.id, c]));
     const etabVehiculeCounts = vehiculesActifs.reduce((acc, v) => {
       const nom = contratById[v.contrat_id]?.etablissementNom || "Inconnu";
       acc[nom] = (acc[nom] || 0) + 1;
       return acc;
     }, {});
-    const topEtablissementsVehicules = Object.entries(etabVehiculeCounts)
-      .map(([name, vehicules]) => ({ name, vehicules }))
-      .sort((a, b) => b.vehicules - a.vehicules)
-      .slice(0, 8);
-
-    // --- Véhicules par marque
-    const marqueCounts = vehiculesActifs.reduce((acc, v) => {
-      const key = v.marque?.trim() || "Inconnue";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    const topMarques = Object.entries(marqueCounts)
-      .map(([name, vehicules]) => ({ name, vehicules }))
-      .sort((a, b) => b.vehicules - a.vehicules)
-      .slice(0, 8);
-
-    // --- Top établissements par nombre de contrats
     const etabContratCounts = contratsAll.reduce((acc, c) => {
       const nom = c.etablissementNom || "Inconnu";
       acc[nom] = (acc[nom] || 0) + 1;
       return acc;
     }, {});
-    const topEtablissementsContrats = Object.entries(etabContratCounts)
-      .map(([name, contrats]) => ({ name, contrats }))
-      .sort((a, b) => b.contrats - a.contrats)
-      .slice(0, 8);
+    const topEtablissementsFlotte = Object.entries(etabVehiculeCounts)
+      .map(([nom, vehicules]) => ({ nom, vehicules, contrats: etabContratCounts[nom] || 0 }))
+      .sort((a, b) => b.vehicules - a.vehicules)
+      .slice(0, 3);
 
-    // --- Actifs vs Retirés
-    const actifsVsRetires = [
-      { name: "Actifs", value: totalActifs },
-      { name: "Retirés", value: totalRetires },
-    ];
-
-    // --- Répartition par gouvernorat
-    const gouvCounts = etablissements.reduce((acc, e) => {
-      const key = e.gouvernorat?.trim() || "Non renseigné";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {});
-    const repartitionGouvernorat = Object.entries(gouvCounts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 7);
-
-    // --- Derniers véhicules ajoutés (les 3 plus récents)
-    const vehiculesRecents = [...vehiculesActifs]
-      .filter((v) => v.created_at)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 3)
-      .map((v) => ({
-        immat: v.immatriculation,
-        marque: v.marque || "Marque inconnue",
-        etab: contratById[v.contrat_id]?.etablissementNom || "—",
-        date: new Date(v.created_at).toLocaleDateString("fr-FR"),
-      }));
+    // --- Latest Activity
+    const latestActivity = [
+      ...vehiculesActifs.filter((v) => v.created_at).map((v) => ({
+        type: "vehicule_ajoute",
+        label: `${v.immatriculation || "—"} — ${v.marque || "Marque inconnue"}`,
+        detail: contratById[v.contrat_id]?.etablissementNom || "—",
+        date: v.created_at,
+      })),
+      ...vehiculesRetires.filter((v) => v.created_at).map((v) => ({
+        type: "vehicule_retire",
+        label: `${v.immatriculation || "—"} — ${v.marque || "Marque inconnue"}`,
+        detail: "Véhicule retiré",
+        date: v.created_at,
+      })),
+      ...contratsAll.filter((c) => c.created_at).map((c) => ({
+        type: "contrat_cree",
+        label: `Contrat ${c.numero_police || "—"}`,
+        detail: c.etablissementNom || "—",
+        date: c.created_at,
+      })),
+      ...etablissements.filter((e) => e.created_at).map((e) => ({
+        type: "etablissement_cree",
+        label: e.nom,
+        detail: e.gouvernorat || "",
+        date: e.created_at,
+      })),
+    ]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 6);
 
     return {
       totalEtablissements, totalContrats, totalActifs, totalRetires,
       nouveauxEtabsMois, nouveauxVehiculesMois,
-      topEtablissementsVehicules, topMarques, topEtablissementsContrats,
-      actifsVsRetires, repartitionGouvernorat, vehiculesRecents,
+      topEtablissementsFlotte, latestActivity,
     };
   }, [etablissements, contratsAll, vehiculesActifs, vehiculesRetires]);
 
-  const totalGouv = stats.repartitionGouvernorat.reduce((s, d) => s + d.value, 0);
-  const totalAvr = stats.actifsVsRetires.reduce((s, d) => s + d.value, 0);
+  const topVehicules = topData?.topVehicules || [];
+  const topContrats = topData?.topContrats || [];
+  const evolution = topData?.evolution || [];
+  const brackets = topData?.brackets || [];
+  const totalBrackets = brackets.reduce((s, d) => s + d.value, 0);
 
   if (loading) {
     return (
@@ -213,7 +208,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      {/* KPI ROW — vibrant cards */}
+      {/* KPI ROW */}
       <div className="row g-3 mb-4">
         <div className="col-6 col-lg-3">
           <KpiCard icon={Building2} label="Établissements" value={stats.totalEtablissements} bg="#0B1F38" fg="#fff" sub={`+${stats.nouveauxEtabsMois} ce mois`} />
@@ -230,52 +225,34 @@ export default function DashboardPage() {
       </div>
 
       <div className="row g-3">
-        {/* TOP ÉTABLISSEMENTS (véhicules) */}
+        {/* TARIFICATION — BRACKETS */}
         <div className="col-lg-7">
-          <Panel title="Top établissements (véhicules)" action={<span style={{ fontSize: 11.5, color: MUTED }}>parc client</span>}>
-            {stats.topEtablissementsVehicules.length === 0 ? (
+          <Panel title="Marge de tarification des véhicules" action={<span style={{ fontSize: 11.5, color: MUTED }}>{totalBrackets} véhicules</span>}>
+            {brackets.length === 0 ? (
               <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
             ) : (
-              <ResponsiveContainer width="100%" height={190}>
-                <BarChart data={stats.topEtablissementsVehicules} margin={{ top: 5, right: 5, left: -20, bottom: 0 }} layout="vertical">
-                  <CartesianGrid horizontal={false} stroke={BORDER} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
-                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={110} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "#F3F5F8" }} />
-                  <Bar dataKey="vehicules" fill="#2B6CB0" radius={[0, 6, 6, 0]} maxBarSize={22} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </Panel>
-        </div>
-
-        {/* RÉPARTITION PAR GOUVERNORAT */}
-        <div className="col-lg-5">
-          <Panel title="Établissements par gouvernorat">
-            {stats.repartitionGouvernorat.length === 0 ? (
-              <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
-            ) : (
-              <div className="d-flex align-items-center gap-3">
-                <div style={{ width: 130, height: 130, flexShrink: 0 }}>
+              <div className="d-flex align-items-center gap-3" style={{ height: 210 }}>
+                <div style={{ width: 180, height: 180, flexShrink: 0 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={stats.repartitionGouvernorat} dataKey="value" nameKey="name" innerRadius={38} outerRadius={62} paddingAngle={2} stroke="none">
-                        {stats.repartitionGouvernorat.map((d, i) => (
-                          <Cell key={d.name} fill={GOUV_COLORS[i % GOUV_COLORS.length]} />
+                      <Pie data={brackets} dataKey="value" nameKey="name" innerRadius={48} outerRadius={80} paddingAngle={2} stroke="none">
+                        {brackets.map((d) => (
+                          <Cell key={d.name} fill={d.name === "<150" ? "#1E7B3A" : d.name === "150-350" ? "#2B6CB0" : d.name === "350-500" ? "#B8912E" : "#B3261E"} />
                         ))}
                       </Pie>
-                      <Tooltip content={<ChartTooltip />} />
+                      <RechartsTooltip content={<PieTooltip />} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
                 <div className="flex-grow-1">
-                  {stats.repartitionGouvernorat.map((d, i) => {
-                    const pct = totalGouv ? Math.round((d.value / totalGouv) * 100) : 0;
+                  {brackets.map((d) => {
+                    const pct = totalBrackets ? Math.round((d.value / totalBrackets) * 100) : 0;
+                    const dotColor = d.name === "<150" ? "#1E7B3A" : d.name === "150-350" ? "#2B6CB0" : d.name === "350-500" ? "#B8912E" : "#B3261E";
                     return (
-                      <div key={d.name} className="d-flex align-items-center gap-2 mb-1">
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: GOUV_COLORS[i % GOUV_COLORS.length], flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: "#161B22" }}>{d.name}</span>
-                        <span style={{ fontSize: 11.5, color: MUTED, marginLeft: "auto" }}>{d.value} · {pct}%</span>
+                      <div key={d.name} className="d-flex align-items-center gap-2 mb-2">
+                        <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: dotColor, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12.5, color: "#161B22" }}>{d.name} DT</span>
+                        <span style={{ fontSize: 12, color: MUTED, marginLeft: "auto" }}>{d.value} · {pct}%</span>
                       </div>
                     );
                   })}
@@ -285,107 +262,109 @@ export default function DashboardPage() {
           </Panel>
         </div>
 
-        {/* VÉHICULES PAR MARQUE */}
-        <div className="col-lg-7">
-          <Panel title="Véhicules par marque" action={<span style={{ fontSize: 11.5, color: MUTED }}>{stats.topMarques.reduce((s, d) => s + d.vehicules, 0)} véhicules</span>}>
-            {stats.topMarques.length === 0 ? (
+        {/* TOP CONTRATS PLUS CHERS */}
+        <div className="col-lg-5">
+          <Panel title="Top contrats les plus chers" action={<span style={{ fontSize: 11.5, color: MUTED }}>prime TTC</span>}>
+            {topContrats.length === 0 ? (
               <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
             ) : (
-              <ResponsiveContainer width="100%" height={190}>
-                <BarChart data={stats.topMarques} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={topContrats} margin={{ top: 5, right: 5, left: -20, bottom: 0 }} layout="vertical">
+                  <CartesianGrid horizontal={false} stroke={BORDER} />
+                  <XAxis type="number" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false}
+                    tickFormatter={(v) => v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " DT"} />
+                  <YAxis dataKey="numeroPolice" type="category" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={80} />
+                  <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: "#F3F5F8" }} />
+                  <Bar dataKey="primeTTC" fill="#B8912E" radius={[0, 6, 6, 0]} maxBarSize={22} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </Panel>
+        </div>
+      </div>
+
+      <div className="row g-3 mt-3">
+        {/* ÉVOLUTION CHIFFRE D'AFFAIRES */}
+        <div className="col-lg-7">
+          <Panel title="Évolution du chiffre d'affaires" action={<span style={{ fontSize: 11.5, color: MUTED }}>par mois</span>}>
+            {evolution.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={210}>
+                <BarChart data={evolution} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke={BORDER} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={40} />
-                  <Tooltip content={<ChartTooltip />} cursor={{ fill: "#F3F5F8" }} />
-                  <Bar dataKey="vehicules" radius={[6, 6, 0, 0]} maxBarSize={36}>
-                    {stats.topMarques.map((d, i) => (
-                      <Cell key={d.name} fill={BRAND_COLORS[i % BRAND_COLORS.length]} />
-                    ))}
-                  </Bar>
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={50}
+                    tickFormatter={(v) => v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " DT"} />
+                  <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: "#F3F5F8" }} />
+                  <Bar dataKey="value" fill="#1E7B3A" radius={[6, 6, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </Panel>
         </div>
 
-        {/* ACTIFS VS RETIRÉS */}
+        {/* TOP 3 ÉTABLISSEMENTS PAR FLOTTE ASSURÉE */}
         <div className="col-lg-5">
-          <Panel title="Parc véhicules">
-            {totalAvr === 0 ? (
+          <Panel title="Top 3 établissements par flotte assurée">
+            {stats.topEtablissementsFlotte.length === 0 ? (
               <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
             ) : (
-              <div className="d-flex align-items-center gap-3">
-                <div style={{ width: 130, height: 130, flexShrink: 0 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={stats.actifsVsRetires} dataKey="value" nameKey="name" innerRadius={38} outerRadius={62} paddingAngle={2} stroke="none">
-                        <Cell fill="#1E7B3A" />
-                        <Cell fill="#F1F2F4" />
-                      </Pie>
-                      <Tooltip content={<ChartTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
+              <div style={{ fontSize: 12.5 }}>
+                <div className="d-flex align-items-center py-2" style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED, fontWeight: 500 }}>
+                  <span style={{ width: 40 }}>Rang</span>
+                  <span className="flex-grow-1">Établissement</span>
+                  <span style={{ width: 70, textAlign: "right" }}>Contrats</span>
+                  <span style={{ width: 80, textAlign: "right" }}>Véhicules</span>
                 </div>
-                <div className="flex-grow-1">
-                  {stats.actifsVsRetires.map((d) => {
-                    const pct = totalAvr ? Math.round((d.value / totalAvr) * 100) : 0;
-                    return (
-                      <div key={d.name} className="d-flex align-items-center gap-2 mb-2">
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.name === "Actifs" ? "#1E7B3A" : "#D0D5DE", flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: "#161B22" }}>{d.name}</span>
-                        <span style={{ fontSize: 11.5, color: MUTED, marginLeft: "auto" }}>{d.value} · {pct}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {stats.topEtablissementsFlotte.map((e, i) => (
+                  <div key={e.nom} className="d-flex align-items-center py-2" style={{ borderBottom: i < stats.topEtablissementsFlotte.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                    <span className="d-flex align-items-center justify-content-center rounded-3 fw-bold" style={{ width: 40, height: 30, backgroundColor: i === 0 ? "#B8912E" : i === 1 ? "#A0A8B4" : i === 2 ? "#C05A2E" : "#EEF2F7", color: i < 3 ? "#fff" : MUTED, fontSize: 14 }}>
+                      {i + 1}
+                    </span>
+                    <span className="flex-grow-1 fw-medium" style={{ paddingLeft: 10, color: "#161B22" }}>{e.nom.length > 28 ? e.nom.slice(0, 26) + "…" : e.nom}</span>
+                    <span style={{ width: 70, textAlign: "right", color: MUTED }}>{e.contrats}</span>
+                    <span style={{ width: 80, textAlign: "right", fontWeight: 600, color: NAVY }}>{e.vehicules}</span>
+                  </div>
+                ))}
               </div>
             )}
           </Panel>
         </div>
       </div>
 
-      {/* DEUXIÈME RANGÉE */}
+      {/* LATEST ACTIVITY */}
       <div className="mt-3">
         <div className="row g-3">
-          {/* TOP ÉTABLISSEMENTS (contrats) */}
-          <div className="col-lg-7">
-            <Panel title="Top établissements (contrats)" action={<span style={{ fontSize: 11.5, color: MUTED }}>portefeuille</span>}>
-              {stats.topEtablissementsContrats.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
+          <div className="col-12">
+            <Panel title="Activité récente" action={<span style={{ fontSize: 11.5, color: MUTED }}><Clock size={12} style={{ marginRight: 4 }} />les plus récentes</span>}>
+              {stats.latestActivity.length === 0 ? (
+                <p style={{ fontSize: 12.5, color: MUTED }}>Aucune activité pour l'instant.</p>
               ) : (
-                <ResponsiveContainer width="100%" height={190}>
-                  <BarChart data={stats.topEtablissementsContrats} margin={{ top: 5, right: 5, left: -20, bottom: 0 }} layout="vertical">
-                    <CartesianGrid horizontal={false} stroke={BORDER} />
-                    <XAxis type="number" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={110} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "#F3F5F8" }} />
-                    <Bar dataKey="contrats" fill="#B8912E" radius={[0, 6, 6, 0]} maxBarSize={22} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </Panel>
-          </div>
-
-          {/* DERNIERS VÉHICULES AJOUTÉS */}
-          <div className="col-lg-5">
-            <Panel title="Derniers véhicules ajoutés">
-              {stats.vehiculesRecents.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: MUTED }}>Aucun véhicule pour l'instant.</p>
-              ) : (
-                stats.vehiculesRecents.map((v, i) => (
-                  <div key={i} className="d-flex align-items-center justify-content-between py-2" style={{ borderBottom: i < stats.vehiculesRecents.length - 1 ? `1px solid ${BORDER}` : "none" }}>
-                    <div className="d-flex align-items-center gap-2">
-                      <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 30, height: 30, backgroundColor: "#EEF2F7" }}>
-                        <Car size={14} color={NAVY} />
-                      </span>
-                      <div>
-                        <p className="mb-0" style={{ fontSize: 13, fontWeight: 500 }}>{v.immat} — {v.marque}</p>
-                        <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>{v.etab}</p>
+                stats.latestActivity.map((a, i) => {
+                  const iconMap = {
+                    vehicule_ajoute: { icon: Car, bg: "#E7F5EC", fg: "#1E7B3A" },
+                    vehicule_retire: { icon: Archive, bg: "#FBE7E7", fg: "#B3261E" },
+                    contrat_cree: { icon: FileText, bg: "#FDF3E7", fg: "#B8912E" },
+                    etablissement_cree: { icon: Building2, bg: "#EAF1FB", fg: "#0B1F38" },
+                  };
+                  const Icon = iconMap[a.type]?.icon || Car;
+                  const { bg, fg } = iconMap[a.type] || {};
+                  return (
+                    <div key={i} className="d-flex align-items-center justify-content-between py-2" style={{ borderBottom: i < stats.latestActivity.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 30, height: 30, backgroundColor: bg }}>
+                          <Icon size={14} color={fg} />
+                        </span>
+                        <div>
+                          <p className="mb-0" style={{ fontSize: 13, fontWeight: 500 }}>{a.label}</p>
+                          <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>{a.detail}</p>
+                        </div>
                       </div>
+                      <span style={{ fontSize: 11.5, color: MUTED }}>{new Date(a.date).toLocaleDateString("fr-FR")}</span>
                     </div>
-                    <span style={{ fontSize: 11.5, color: MUTED }}>{v.date}</span>
-                  </div>
-                ))
+                  );
+                })
               )}
             </Panel>
           </div>
