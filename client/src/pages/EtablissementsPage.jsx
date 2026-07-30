@@ -6,7 +6,6 @@ import {
   Plus,
   X,
   Pencil,
-  GitMerge,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -19,6 +18,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { etablissementsApi, contratsApi, importApi } from "../services/api";
+import Pagination from "../components/Pagination";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -135,57 +135,6 @@ function EtablissementModal({ mode, initialData, onClose, onSubmit, submitting }
           <button className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2" style={{ fontSize: 13, backgroundColor: NAVY, borderColor: NAVY }} onClick={handleSubmit} disabled={submitting}>
             {submitting && <Loader2 size={14} className="spin" />}
             {mode === "edit" ? "Enregistrer" : "Créer"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FusionModal({ etablissements, onClose, onSubmit, submitting }) {
-  const [sourceId, setSourceId] = useState("");
-  const [cibleId, setCibleId] = useState("");
-  const [error, setError] = useState("");
-
-  const handleSubmit = () => {
-    if (!sourceId || !cibleId) return setError("Sélectionne les deux établissements");
-    if (sourceId === cibleId) return setError("Choisis deux établissements différents");
-    setError("");
-    onSubmit(sourceId, cibleId);
-  };
-
-  return (
-    <div
-      className="d-flex align-items-center justify-content-center"
-      style={{ position: "fixed", inset: 0, background: "rgba(11,31,56,0.35)", zIndex: 60 }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="bg-white rounded-4 p-4 modal-pop" style={{ width: 400, maxWidth: "92vw" }}>
-        <div className="d-flex align-items-center justify-content-between mb-3">
-          <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Fusionner deux établissements</p>
-          <button className="btn btn-sm border-0 p-1" onClick={onClose}><X size={18} color={MUTED} /></button>
-        </div>
-
-        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Source (sera supprimée)</label>
-        <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
-          <option value="">Sélectionner...</option>
-          {etablissements.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
-        </select>
-
-        <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Cible (conservée)</label>
-        <select className="form-select" style={{ fontSize: 13, borderColor: BORDER }} value={cibleId} onChange={(e) => setCibleId(e.target.value)}>
-          <option value="">Sélectionner...</option>
-          {etablissements.map((e) => <option key={e.id} value={e.id}>{e.nom}</option>)}
-        </select>
-
-        <p style={{ fontSize: 11.5, color: MUTED, margin: "10px 0 0" }}>Tous les contrats et véhicules de la source seront transférés vers la cible. Action irréversible.</p>
-        {error && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "6px 0 0" }}>{error}</p>}
-
-        <div className="d-flex gap-2 mt-4">
-          <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>
-          <button className="btn flex-grow-1 text-white d-flex align-items-center justify-content-center gap-2" style={{ fontSize: 13, backgroundColor: "#B3261E", borderColor: "#B3261E" }} onClick={handleSubmit} disabled={submitting}>
-            {submitting && <Loader2 size={14} className="spin" />}
-            Confirmer la fusion
           </button>
         </div>
       </div>
@@ -587,10 +536,11 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
     if (reopenEtablissement) onReopenConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [showFusion, setShowFusion] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 20;
 
   const loadData = async () => {
     setLoading(true);
@@ -623,6 +573,11 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
     });
   }, [etablissements, search, gouvernoratFilter, contratsFilter]);
 
+  useEffect(() => { setPage(1); }, [filtered.length]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const pageData = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
   const openCreate = () => { setEditingEtab(null); setEtabModalMode("create"); };
   const openEdit = (e) => { setEditingEtab(e); setEtabModalMode("edit"); };
   const closeEtabModal = () => { setEtabModalMode(null); setEditingEtab(null); };
@@ -646,33 +601,10 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
     }
   };
 
-  const handleFusion = async (sourceId, cibleId) => {
-    setSubmitting(true);
-    try {
-      await etablissementsApi.fusionner(sourceId, cibleId);
-      setToast("Fusion effectuée");
-      setShowFusion(false);
-      loadData();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div>
-      <div className="d-flex align-items-center justify-content-between mb-4">
-        <div>
-          <p className="mb-0 fw-semibold" style={{ fontSize: 18, color: "#161B22" }}>Établissements</p>
-          <p className="mb-0" style={{ fontSize: 13, color: MUTED }}>Établissements publics et leurs contrats</p>
-        </div>
+      <div className="d-flex align-items-center justify-content-end mb-0">
         <div className="d-flex gap-2">
-          {user?.role !== 'guest' && (
-            <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowFusion(true)}>
-              <GitMerge size={15} /> Fusionner
-            </button>
-          )}
           {user?.role !== 'guest' && (
             <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13.5, padding: "9px 14px", borderColor: BORDER, color: NAVY }} onClick={() => setShowImport(true)}>
               <Upload size={15} /> Importer
@@ -728,54 +660,57 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
         ) : filtered.length === 0 ? (
           <div className="p-5 text-center" style={{ color: MUTED, fontSize: 13 }}>Aucun établissement ne correspond à ces critères.</div>
         ) : (
-          <table className="w-100" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Établissement</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Gouvernorat</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Responsable</th>
-                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Contact</th>
-                <th style={{ padding: "12px 16px" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((e) => (
-                <tr
-                  key={e.id}
-                  style={{ borderBottom: `1px solid ${BORDER}`, cursor: "pointer", transition: "background-color 0.15s ease" }}
-                  onClick={() => setQuickView(e)}
-                  onMouseEnter={(ev) => (ev.currentTarget.style.backgroundColor = "#FAFBFC")}
-                  onMouseLeave={(ev) => (ev.currentTarget.style.backgroundColor = "transparent")}
-                >
-                  <td style={{ padding: "12px 16px" }}>
-                    <div className="d-flex align-items-center gap-2">
-                      <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 34, height: 34, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
-                        <Building2 size={15} color={NAVY} />
-                      </span>
-                      <div>
-                        <p className="mb-0 fw-medium" style={{ fontSize: 13 }}>{e.nom}</p>
-                        <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>{e.identifiant_unique}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>{e.gouvernorat || "—"}</td>
-                  <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>{e.responsable_parc_auto || "—"}</td>
-                  <td style={{ padding: "12px 8px", fontSize: 12, color: MUTED }}>
-                    {e.telephone || e.mobile || e.email || "—"}
-                  </td>
-                  <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                    <button
-                      className="btn btn-sm d-flex align-items-center gap-1 border-0 ms-auto"
-                      style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
-                      onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
-                    >
-                      <Pencil size={13} /> Modifier
-                    </button>
-                  </td>
+          <>
+            <table className="w-100" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
+                  <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Établissement</th>
+                  <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Gouvernorat</th>
+                  <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Responsable</th>
+                  <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Contact</th>
+                  <th style={{ padding: "12px 16px" }}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {pageData.map((e) => (
+                  <tr
+                    key={e.id}
+                    style={{ borderBottom: `1px solid ${BORDER}`, cursor: "pointer", transition: "background-color 0.15s ease" }}
+                    onClick={() => setQuickView(e)}
+                    onMouseEnter={(ev) => (ev.currentTarget.style.backgroundColor = "#FAFBFC")}
+                    onMouseLeave={(ev) => (ev.currentTarget.style.backgroundColor = "transparent")}
+                  >
+                    <td style={{ padding: "12px 16px" }}>
+                      <div className="d-flex align-items-center gap-2">
+                        <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 34, height: 34, backgroundColor: "#EEF2F7", flexShrink: 0 }}>
+                          <Building2 size={15} color={NAVY} />
+                        </span>
+                        <div>
+                          <p className="mb-0 fw-medium" style={{ fontSize: 13 }}>{e.nom}</p>
+                          <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>{e.identifiant_unique}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>{e.gouvernorat || "—"}</td>
+                    <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>{e.responsable_parc_auto || "—"}</td>
+                    <td style={{ padding: "12px 8px", fontSize: 12, color: MUTED }}>
+                      {e.telephone || e.mobile || e.email || "—"}
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <button
+                        className="btn btn-sm d-flex align-items-center gap-1 border-0 ms-auto"
+                        style={{ fontSize: 12, fontWeight: 500, backgroundColor: "#EAF1FB", color: "#2B6CB0", borderRadius: 8 }}
+                        onClick={(ev) => { ev.stopPropagation(); openEdit(e); }}
+                      >
+                        <Pencil size={13} /> Modifier
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          </>
         )}
       </div>
 
@@ -789,10 +724,6 @@ export default function EtablissementsPage({ onOpenContrat, reopenEtablissement,
           onClose={() => setQuickView(null)}
           onOpenContrat={(etab, contrat) => { onOpenContrat?.(etab, contrat); setQuickView(null); }}
         />
-      )}
-
-      {showFusion && (
-        <FusionModal etablissements={etablissements} onClose={() => setShowFusion(false)} onSubmit={handleFusion} submitting={submitting} />
       )}
 
       {showImport && (

@@ -53,9 +53,8 @@ function validateRow(row) {
     if (row.marque && !RE_ALPHA.test(row.marque)) {
         errors.push(`Marque invalide, doit être alphabétique ("${row.marque}")`);
     }
-    if (row.usage && !RE_ALPHA.test(row.usage)) {
-        errors.push(`Usage invalide, doit être alphabétique ("${row.usage}")`);
-    }
+    // L'usage n'est pas vérifié par RE_ALPHA car les valeurs contiennent
+    // des chiffres (ex: "3.5 T"), des parenthèses (ex: "(U1)") et des apostrophes.
 
     // --- Champs numériques : doivent être des nombres, et positifs ---
     for (const field of NUMERIC_FIELDS) {

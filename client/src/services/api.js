@@ -3,7 +3,7 @@
 // Toute la logique fetch/URL vit ici — les pages ne font plus jamais
 // de fetch("http://...") en dur, elles importent ces fonctions.
 
-const API_BASE = "http://localhost:5000/api";
+export const API_BASE = "http://localhost:5000/api";
 const TOKEN_KEY = "bh_token";
 
 export const tokenStorage = {
@@ -98,15 +98,14 @@ export const vehiculesApi = {
 
 
 
-// À ajouter dans src/services/api.js, à la suite de vehiculesApi.
-// Utilise fetch directement (pas le wrapper `request`) car il faut envoyer
-// du FormData, pas du JSON — pas de Content-Type manuel non plus, le
-// navigateur doit fixer lui-même le boundary du multipart.
+// Import en masse — utilise fetch directement (FormData), pas le wrapper request
+// car le Content-Type multipart doit être laissé au navigateur.
 export const importApi = {
   dryRunVehicules: async (file) => {
     const formData = new FormData();
     formData.append("fichier", file);
-    const res = await fetch(`${API_BASE}/import/vehicules/dry-run`, { method: "POST", body: formData });
+    const token = tokenStorage.get();
+    const res = await fetch(`${API_BASE}/import/vehicules/dry-run`, { method: "POST", body: formData, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
     return body;
@@ -114,7 +113,8 @@ export const importApi = {
   commitVehicules: async (file) => {
     const formData = new FormData();
     formData.append("fichier", file);
-    const res = await fetch(`${API_BASE}/import/vehicules/commit`, { method: "POST", body: formData });
+    const token = tokenStorage.get();
+    const res = await fetch(`${API_BASE}/import/vehicules/commit`, { method: "POST", body: formData, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
     return body;
@@ -122,7 +122,8 @@ export const importApi = {
   dryRunEtablissements: async (file) => {
     const formData = new FormData();
     formData.append("fichier", file);
-    const res = await fetch(`${API_BASE}/import/etablissements/dry-run`, { method: "POST", body: formData });
+    const token = tokenStorage.get();
+    const res = await fetch(`${API_BASE}/import/etablissements/dry-run`, { method: "POST", body: formData, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
     return body;
@@ -130,7 +131,8 @@ export const importApi = {
   commitEtablissements: async (file) => {
     const formData = new FormData();
     formData.append("fichier", file);
-    const res = await fetch(`${API_BASE}/import/etablissements/commit`, { method: "POST", body: formData });
+    const token = tokenStorage.get();
+    const res = await fetch(`${API_BASE}/import/etablissements/commit`, { method: "POST", body: formData, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error(body?.message || `Erreur ${res.status}`);
     return body;
@@ -150,9 +152,10 @@ export const contratInjectionApi = {
   liste: () => request("/contrats-injection/liste"),
 
   injecter: async (contratIds) => {
+    const token = tokenStorage.get();
     const res = await fetch(`${API_BASE}/contrats-injection/injecter`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ contratIds }),
     });
 

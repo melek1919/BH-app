@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FileText, Search, Download, Loader2, AlertCircle, CheckCircle2, RefreshCw, Building2, Clock, X, Layers, Car } from "lucide-react";
 import { contratInjectionApi, tarificationApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import Pagination from "../components/Pagination";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -13,20 +14,8 @@ const STATUT_STYLE = {
   a_reinjecter: { bg: "#FDF1DE", fg: "#A15C00", label: "À réinjecter" },
 };
 
-// Petite palette d'accent pour l'icône établissement — casse la monotonie
-// visuelle de la liste, comme sur EtablissementsPage.
-const ACCENT_PALETTE = [
-  { bg: "#EAF1FB", fg: "#2B6CB0" },
-  { bg: "#E7F5EC", fg: "#1E7B3A" },
-  { bg: "#FDF1DE", fg: "#A15C00" },
-  { bg: "#F3E8FD", fg: "#6B3FA0" },
-  { bg: "#E4F4F5", fg: "#1B7A80" },
-];
-const accentFor = (key = "") => {
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) hash = key.charCodeAt(i) + ((hash << 5) - hash);
-  return ACCENT_PALETTE[Math.abs(hash) % ACCENT_PALETTE.length];
-};
+// Couleur unique par défaut pour toutes les icônes établissement
+const DEFAULT_ACCENT = { bg: "#EEF2F7", fg: NAVY };
 
 function StatutBadge({ statut }) {
   const s = STATUT_STYLE[statut] || STATUT_STYLE.a_injecter;
@@ -58,6 +47,8 @@ export default function ContratsInjectionPage() {
   const [injecting, setInjecting] = useState(false);
   const [toast, setToast] = useState(null);
   const [tarifs, setTarifs] = useState({});
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 20;
 
   const loadData = async () => {
     setLoading(true);
@@ -112,6 +103,11 @@ export default function ContratsInjectionPage() {
 
   const allEligibleSelected = eligibleFiltered.length > 0 && eligibleFiltered.every((c) => selected.has(c.id));
 
+  useEffect(() => { setPage(1); }, [filtered.length]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const pageData = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
   const toggleOne = (c) => {
     if (!isEligible(c)) return;
     setSelected((prev) => {
@@ -158,16 +154,6 @@ export default function ContratsInjectionPage() {
       {/* En-tête avec liseré dégradé, cohérent avec ContratPage */}
       <div className="rounded-4 p-4 mb-4 position-relative overflow-hidden" style={{ backgroundColor: "#fff", border: `1px solid ${BORDER}`, boxShadow: "0 1px 2px rgba(11,31,56,0.04)" }}>
         <div className="position-absolute top-0 start-0 w-100" style={{ height: 3, background: "linear-gradient(90deg, #0B1F38 0%, #2B6CB0 50%, #B8912E 100%)" }} />
-
-        <div className="d-flex align-items-center gap-3 mb-3">
-          <span className="d-flex align-items-center justify-content-center rounded-4" style={{ width: 44, height: 44, background: "linear-gradient(135deg, #EAF1FB 0%, #EEF2F7 100%)" }}>
-            <FileText size={20} color="#2B6CB0" />
-          </span>
-          <div>
-            <p className="mb-0 fw-semibold" style={{ fontSize: 16, color: "#161B22" }}>Contrats</p>
-            <p className="mb-0" style={{ fontSize: 12.5, color: MUTED }}>Sélectionne les contrats à injecter dans le système d'information</p>
-          </div>
-        </div>
 
         <div className="row g-3">
           {STAT_CARDS.map((s) => (
@@ -240,7 +226,8 @@ export default function ContratsInjectionPage() {
         ) : filtered.length === 0 ? (
           <div className="p-5 text-center" style={{ color: MUTED, fontSize: 13 }}>Aucun contrat ne correspond à ces critères.</div>
         ) : (
-          <table className="w-100" style={{ borderCollapse: "collapse" }}>
+          <>
+            <table className="w-100" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
                 <th style={{ padding: "14px 16px", width: 40 }}>
@@ -256,10 +243,10 @@ export default function ContratsInjectionPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => {
+              {pageData.map((c) => {
                 const eligible = isEligible(c);
                 const isSelected = selected.has(c.id);
-                const accent = accentFor(c.etablissement_nom);
+                const accent = DEFAULT_ACCENT;
                 return (
                   <tr
                     key={c.id}
@@ -302,7 +289,7 @@ export default function ContratsInjectionPage() {
                     </td>
                     <td style={{ padding: "13px 8px", textAlign: "right" }}>
                       {tarifs[c.id] != null ? (
-                        <span style={{ fontSize: 12, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: "#F3E8FD", color: "#6B3FA0", whiteSpace: "nowrap", fontFamily: "monospace" }}>
+                        <span style={{ fontSize: 12, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: "#FEF0E6", color: "#C0761A", whiteSpace: "nowrap", fontFamily: "monospace" }}>
                           {tarifs[c.id].toFixed(2)} DT
                         </span>
                       ) : (
@@ -316,10 +303,12 @@ export default function ContratsInjectionPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          </>
         )}
       </div>
 
-      {/* Barre d'action flottante — apparaît dès qu'au moins un contrat est sélectionné */}
+      {/* Barre d'action flottante */}
       {selected.size > 0 && user?.role !== 'guest' && (
         <div
           className="position-fixed d-flex align-items-center gap-3 rounded-4 px-4 py-3"

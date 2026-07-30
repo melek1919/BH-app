@@ -4,6 +4,7 @@ import { vehiculesApi, importApi, contratsApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
+import Pagination from "../components/Pagination";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -367,6 +368,8 @@ export default function VehiculesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 40;
 
   const loadData = async () => {
     setLoading(true);
@@ -399,6 +402,11 @@ export default function VehiculesPage() {
       return matchesSearch && matchesEtablissement && matchesMarque;
     });
   }, [vehicules, search, etablissementFilter, marqueFilter]);
+
+  useEffect(() => { setPage(1); }, [filtered.length]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const pageData = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const buildPayload = (form) => ({
     contrat_id: Number(form.contrat_id),
@@ -468,13 +476,7 @@ export default function VehiculesPage() {
 
   return (
     <div>
-      <div className="d-flex align-items-center justify-content-between mb-4">
-        <div>
-          <p className="mb-0 fw-semibold" style={{ fontSize: 18, color: "#161B22" }}>Véhicules</p>
-          <p className="mb-0" style={{ fontSize: 13, color: MUTED }}>
-            Gestion du parc automobile des établissements
-          </p>
-        </div>
+      <div className="d-flex align-items-center justify-content-end mb-0">
         <div className="d-flex align-items-center gap-2">
           {user?.role !== 'guest' && (
             <button
@@ -559,7 +561,8 @@ export default function VehiculesPage() {
             Aucun véhicule ne correspond à ces critères.
           </div>
         ) : (
-          <table className="w-100" style={{ borderCollapse: "collapse" }}>
+          <>
+            <table className="w-100" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Véhicule</th>
@@ -571,7 +574,7 @@ export default function VehiculesPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v) => {
+              {pageData.map((v) => {
                 const tag = USAGE_TAG(v.usage);
                 const isActif = v.statut_retrait === "actif";
                 return (
@@ -647,6 +650,8 @@ export default function VehiculesPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          </>
         )}
       </div>
 

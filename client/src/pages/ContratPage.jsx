@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+
 import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
@@ -18,11 +19,14 @@ import {
   Search,
   Building2,
   Calendar,
+  BarChart3,
+  Download,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { vehiculesApi, tarificationApi } from "../services/api";
+import { vehiculesApi, tarificationApi, tokenStorage, API_BASE } from "../services/api";
 import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
+import Pagination from "../components/Pagination";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -186,18 +190,18 @@ function TarificationDetailModal({ data, onClose }) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-white rounded-4 modal-pop" style={{ width: 430, maxWidth: "92vw", padding: 0, boxShadow: "0 16px 48px rgba(11,31,56,0.25)" }}>
-        {/* Header minimal */}
+        {/* Header */}
         <div className="d-flex align-items-center justify-content-between px-3" style={{ paddingTop: 14, paddingBottom: 14, borderBottom: `1px solid ${BORDER}` }}>
           <div className="d-flex align-items-center gap-2">
-            <span className="d-flex align-items-center justify-content-center rounded-2" style={{ width: 30, height: 30, backgroundColor: "#F3E8FD" }}>
-              <Car size={14} color="#6B3FA0" />
+            <span className="d-flex align-items-center justify-content-center rounded-2" style={{ width: 30, height: 30, backgroundColor: "#EAF1FB" }}>
+              <Car size={14} color="#0B1F38" />
             </span>
             <span className="fw-semibold" style={{ fontSize: 14, color: "#161B22" }}>{vehicule.immatriculation || "Véhicule"}</span>
           </div>
           <button className="btn btn-sm border-0 p-0" onClick={onClose}><X size={16} color={MUTED} /></button>
         </div>
 
-        {/* Infos véhicule — ligne compacte */}
+        {/* Vehicle info */}
         <div className="d-flex flex-wrap gap-1 px-3" style={{ paddingTop: 10, paddingBottom: 8, borderBottom: `1px solid ${BORDER}` }}>
           <Chip label={vehicule.marque || "—"} />
           <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 20, backgroundColor: tag.bg, color: tag.fg }}>{vehicule.usage || "—"}</span>
@@ -206,7 +210,7 @@ function TarificationDetailModal({ data, onClose }) {
           {vehicule.ptac ? <Chip label={`PTAC ${vehicule.ptac} t`} /> : null}
         </div>
 
-        {/* Détail des primes — tout en une seule liste */}
+        {/* Prime detail */}
         <div style={{ padding: "8px 12px 4px" }}>
           <div className="rounded-2" style={{ border: `1px solid ${BORDER}` }}>
             <Row label="Variable (RC base)" value={detail.variable} />
@@ -221,18 +225,21 @@ function TarificationDetailModal({ data, onClose }) {
             <Row label="Total sans PTA" value={detail.totalSansPTA} bold />
           </div>
 
-          {/* PTA */}
           <div className="rounded-2 mt-1" style={{ border: `1px solid ${BORDER}` }}>
             <Row label={`Prime PTA (2 × ${vehicule.nb_places || 0} pl.)`} value={detail.primePTA} />
             <Row label="TUA / PTA" value={detail.TUA_PTA} />
           </div>
         </div>
 
-        {/* Prime nette totale — badge en bas */}
+        {/* Prime nette totale + Total véhicule */}
         <div className="px-3" style={{ paddingTop: 6, paddingBottom: 14 }}>
-          <div className="rounded-2 text-center" style={{ padding: "6px 0", background: "linear-gradient(135deg, #F3E8FD 0%, #EDE4F7 100%)" }}>
-            <span style={{ fontSize: 11, color: "#6B3FA0", fontWeight: 500 }}>Prime nette totale : </span>
-            <span style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#6B3FA0" }}>{f(detail.primeNetteTotale)} DT</span>
+          <div className="rounded-2 text-center" style={{ padding: "6px 0", background: "#EAF1FB", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: "#0B1F38", fontWeight: 500 }}>Prime nette totale : </span>
+            <span style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#0B1F38" }}>{f(detail.primeNetteTotale)} DT</span>
+          </div>
+          <div className="rounded-2 text-center" style={{ padding: "6px 0", background: "#0B1F38" }}>
+            <span style={{ fontSize: 11, color: "#9BB5D9", fontWeight: 500 }}>Total véhicule (avec PTA) : </span>
+            <span style={{ fontSize: 16, fontFamily: "monospace", fontWeight: 700, color: "#fff" }}>{f(detail.totalAvecPTA)} DT</span>
           </div>
         </div>
       </div>
@@ -274,6 +281,8 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
   const [justCreated, setJustCreated] = useState(false);
   const [toast, setToast] = useState(null);
   const [tarifVehicule, setTarifVehicule] = useState(null);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 30;
 
   const loadVehicules = async () => {
     setLoading(true);
@@ -305,6 +314,11 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
       return matchesSearch && matchesStatut;
     });
   }, [vehicules, search, statutFilter]);
+
+  useEffect(() => { setPage(1); }, [filtered.length]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const pageData = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   const stats = useMemo(() => {
     const actifs = vehicules.filter((v) => v.statut_retrait === "actif");
@@ -380,11 +394,47 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
 
   const echeanceProche = stats.joursRestants != null && stats.joursRestants <= 30;
 
+  const [exporting, setExporting] = useState(false);
+
+  const exportExcel = useCallback(async () => {
+    if (!contrat?.id) return;
+    setExporting(true);
+    try {
+      // Le fichier est généré et stylé côté backend (exceljs) — voir
+      // tarification.export.service.js. On récupère directement le blob
+      // binaire et on déclenche le téléchargement navigateur.
+      const res = await fetch(`${API_BASE}/tarification/contrat/${contrat.id}/export`, {
+        headers: { Authorization: `Bearer ${tokenStorage.get() || ""}` },
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Échec de l'export");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tarification_${contrat.numero_police || "contrat"}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setExporting(false);
+    }
+  }, [contrat]);
+
   return (
     <div>
-      <button className="btn d-flex align-items-center gap-2 mb-3" style={{ fontSize: 13, fontWeight: 600, backgroundColor: "#EEF2F7", color: NAVY, borderRadius: 8, padding: "8px 14px", border: "1px solid " + BORDER, boxShadow: "0 2px 6px rgba(11,31,56,0.08)" }} onClick={onBack}>
-        <ArrowLeft size={15} /> Retour
-      </button>
+      <div className="d-flex align-items-center mb-3 gap-2">
+        <button style={{ fontSize: 12.5, fontWeight: 500, padding: "5px 12px", borderRadius: 8, backgroundColor: "#F1F2F4", color: MUTED, border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }} onClick={onBack}>
+          <ArrowLeft size={14} /> Retour
+        </button>
+      </div>
 
       {toast && (
         <div className="d-flex align-items-center gap-2 p-2 rounded-3 mb-3" style={{ background: "#E7F5EC", color: "#1E7B3A", fontSize: 12.5, width: "fit-content" }}>
@@ -433,14 +483,28 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
             </div>
 
             <div className="d-flex align-items-center gap-2 mt-2 pt-2" style={{ borderTop: `1px solid ${BORDER}` }}>
-              <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 28, height: 28, backgroundColor: "#F3E8FD", flexShrink: 0 }}>
-                <FileText size={13} color="#6B3FA0" />
+              <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 28, height: 28, backgroundColor: "#FEF0E6", flexShrink: 0 }}>
+                <BarChart3 size={13} color="#C0761A" />
               </span>
               <span style={{ fontSize: 12.5, color: "#161B22" }}>
                 <span style={{ color: MUTED }}>Prime TTC : </span>
-                <span className="fw-semibold">{tarif ? `${tarif.primeTTC.toFixed(2)} DT` : "..."}</span>
+                <span className="fw-semibold" style={{ color: "#C0761A" }}>{tarif ? `${tarif.primeTTC.toFixed(2)} DT` : "..."}</span>
               </span>
             </div>
+            {tarif && (
+              <div className="d-flex align-items-center gap-2 mt-1">
+                <span className="d-flex align-items-center justify-content-center rounded-3" style={{ width: 28, height: 28, backgroundColor: "#EAF1FB", flexShrink: 0 }}>
+                  <FileText size={13} color="#2B6CB0" />
+                </span>
+                <span style={{ fontSize: 12.5, color: "#161B22" }}>
+                  <span style={{ color: MUTED }}>Net : </span>
+                  <span className="fw-semibold" style={{ color: "#2B6CB0" }}>{tarif.primeNetteContrat.toFixed(2)} DT</span>
+                  <span style={{ fontSize: 11, color: MUTED, marginLeft: 8 }}>
+                    · {tarif.details.length} véhic. · Ø {tarif.primeTTC > 0 ? (tarif.primeTTC / tarif.details.length).toFixed(0) : 0} DT/véhic.
+                  </span>
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -460,13 +524,6 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                       <Tooltip formatter={(v, n) => [`${v} véhicule${v > 1 ? "s" : ""}`, n]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid " + BORDER }} />
                     </PieChart>
                   </ResponsiveContainer>
-                  {/* Total au centre du donut — actifs, différent du compteur total de la liste */}
-                  <div className="position-absolute top-50 start-50 translate-middle text-center" style={{ pointerEvents: "none" }}>
-                    <p className="mb-0 fw-bold" style={{ fontSize: 22, color: "#161B22", lineHeight: 1 }}>
-                      {stats.repartitionUsage.reduce((sum, d) => sum + d.value, 0)}
-                    </p>
-                    <p className="mb-0" style={{ fontSize: 9.5, color: MUTED }}>actifs</p>
-                  </div>
                 </div>
                 <div className="flex-grow-1">
                   {stats.repartitionUsage.map((d, i) => (
@@ -484,7 +541,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
       </div>
 
       <div className="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-3">
-        <div className="d-flex gap-2 flex-wrap">
+        <div className="d-flex gap-2 flex-wrap align-items-center">
           <p className="mb-0 fw-semibold" style={{ fontSize: 15 }}>Véhicules ({vehicules.length})</p>
           <div className="position-relative">
             <Search size={13} color={MUTED} style={{ position: "absolute", left: 10, top: 9 }} />
@@ -496,8 +553,6 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-     
 
           <div className="d-flex align-items-center rounded-3 p-1" style={{ backgroundColor: "#F1F2F4" }}>
             {[
@@ -523,11 +578,18 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
             ))}
           </div>
         </div>
-        {user?.role !== 'guest' && (
-          <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13, padding: "8px 14px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }} onClick={openCreate}>
-            <Plus size={14} /> Ajouter un véhicule
-          </button>
-        )}
+        <div className="d-flex gap-2">
+          {user?.role !== 'guest' && (
+            <>
+              <button className="btn d-flex align-items-center gap-2 text-white rounded-3" style={{ fontSize: 13, padding: "8px 14px", backgroundColor: NAVY, borderColor: NAVY, boxShadow: "0 2px 6px rgba(11,31,56,0.18)" }} onClick={openCreate}>
+                <Plus size={14} /> Ajouter un véhicule
+              </button>
+              <button className="btn d-flex align-items-center gap-2 rounded-3" style={{ fontSize: 13, padding: "8px 14px", backgroundColor: "#EEF2F7", color: NAVY, border: `1px solid ${BORDER}`, boxShadow: "0 2px 6px rgba(11,31,56,0.08)" }} onClick={exportExcel} disabled={exporting}>
+                {exporting ? <Loader2 size={14} className="spin" /> : <Download size={14} />} {exporting ? "Export en cours..." : "Exporter"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -548,7 +610,8 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
             {vehicules.length === 0 ? "Aucun véhicule sur ce contrat — commence par en ajouter un." : "Aucun véhicule ne correspond à cette recherche."}
           </div>
         ) : (
-          <table className="w-100" style={{ borderCollapse: "collapse" }}>
+          <>
+            <table className="w-100" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid " + BORDER, backgroundColor: "#FAFBFC" }}>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Véhicule</th>
@@ -560,7 +623,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v) => {
+              {pageData.map((v) => {
                 const tag = USAGE_TAG(v.usage);
                 const isActif = v.statut_retrait === "actif";
                 const detail = tarif?.details?.find((d) => d.immatriculation === v.immatriculation);
@@ -601,7 +664,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                     <td style={{ padding: "12px 16px", textAlign: "right" }}>
                       {detail ? (
                         <span style={{ fontSize: 12, fontWeight: 500, padding: "4px 12px", borderRadius: 20, backgroundColor: "#F3E8FD", color: "#6B3FA0", whiteSpace: "nowrap", fontFamily: "monospace" }}>
-                          {detail.totalSansPTA.toFixed(2)} DT
+                          {detail.totalAvecPTA.toFixed(2)} DT
                         </span>
                       ) : (
                         <span style={{ fontSize: 12, color: MUTED }}>—</span>
@@ -640,6 +703,8 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          </>
         )}
       </div>
 

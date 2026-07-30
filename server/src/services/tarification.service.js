@@ -11,8 +11,12 @@ const USAGES = {
   CYCLE: "CYCLES SUPERIEURS à 125 CM3",
 };
 
+function normalize(s) {
+  return (s || "").trim().toUpperCase().replace(/['\s]/g, "");
+}
+
 function eq(usage, ref) {
-  return (usage || "").trim().toUpperCase() === ref.trim().toUpperCase();
+  return normalize(usage) === normalize(ref);
 }
 
 function isMoto(usage) {
@@ -38,7 +42,7 @@ function getVariable(vehicule) {
   if (eq(usage, USAGES.PRIVE)) {
     if (p >= 3 && p <= 4) return 110;
     if (p >= 5 && p <= 6) return 140;
-    if (p >= 7 && p <= 10) return 117;
+    if (p >= 7 && p <= 10) return 170;
     if (p >= 11 && p <= 14) return 220;
     if (p >= 15) return 264;
   }
@@ -105,6 +109,8 @@ export function calcVehicule(vehicule) {
   const primePTA = 2 * nb;
   const TUA_PTA = primePTA * 0.12;
 
+  const totalAvecPTA = Math.round((totalSansPTA + primePTA + TUA_PTA) * 100) / 100;
+
   return {
     variable: Math.round(variable * 100) / 100,
     RC: Math.round(RC * 100) / 100,
@@ -119,6 +125,7 @@ export function calcVehicule(vehicule) {
     totalSansPTA: Math.round(totalSansPTA * 100) / 100,
     primePTA,
     TUA_PTA: Math.round(TUA_PTA * 100) / 100,
+    totalAvecPTA,
   };
 }
 
