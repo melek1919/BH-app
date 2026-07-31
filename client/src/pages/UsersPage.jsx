@@ -76,9 +76,13 @@ function UserModal({ mode = "create", initialData, onClose, onSubmit, submitting
 
   const handleSubmit = () => {
     const nextErrors = {};
+    const ALPHA = /^[a-zA-Z\sàâäéèêëïîôùûüÿçÀÂÄÉÈÊËÏÎÔÙÛÜŸÇ'-]+$/;
     if (!form.nom.trim()) nextErrors.nom = "Champ requis";
+    else if (!ALPHA.test(form.nom.trim())) nextErrors.nom = "Doit contenir uniquement des lettres";
+    if (form.prenom && form.prenom.trim() && !ALPHA.test(form.prenom.trim())) nextErrors.prenom = "Doit contenir uniquement des lettres";
     if (!form.email.trim()) nextErrors.email = "Champ requis";
     else if (!/^[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}$/.test(form.email)) nextErrors.email = "Format email invalide";
+    if (form.tel && !/^[0-9+\s-]+$/.test(form.tel)) nextErrors.tel = "Doit contenir uniquement des chiffres";
     if (mode === "create" && !form.mot_de_passe) nextErrors.mot_de_passe = "Champ requis";
     else if (mode === "create" && form.mot_de_passe.length < 8) nextErrors.mot_de_passe = "Min 8 caractères";
     setErrors(nextErrors);
@@ -117,7 +121,8 @@ function UserModal({ mode = "create", initialData, onClose, onSubmit, submitting
           </div>
           <div className="col-6">
             <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Prénom</label>
-            <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.prenom || ""} onChange={update("prenom")} placeholder="Jean" />
+            <input className="form-control" style={{ fontSize: 13, borderColor: errors.prenom ? "#B3261E" : BORDER }} value={form.prenom || ""} onChange={update("prenom")} placeholder="Jean" />
+            {errors.prenom && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.prenom}</p>}
           </div>
         </div>
 
@@ -126,7 +131,8 @@ function UserModal({ mode = "create", initialData, onClose, onSubmit, submitting
         {errors.email && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.email}</p>}
 
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "8px 0 4px" }}>Téléphone</label>
-        <input className="form-control" style={{ fontSize: 13, borderColor: BORDER }} value={form.tel || ""} onChange={update("tel")} placeholder="+216 00 000 000" />
+        <input className="form-control" style={{ fontSize: 13, borderColor: errors.tel ? "#B3261E" : BORDER }} value={form.tel || ""} onChange={update("tel")} placeholder="+216 00 000 000" />
+        {errors.tel && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{errors.tel}</p>}
 
         {mode === "create" && (
           <>

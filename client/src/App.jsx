@@ -18,6 +18,17 @@ function App() {
   // Établissement dont il faut rouvrir le popup au retour depuis ContratPage
   const [reopenEtab, setReopenEtab] = useState(null);
 
+  // Pages accessibles par rôle — miroir de SidebarLayout (lecture ouverte aux
+  // invités, écriture restreinte gérée dans chaque page).
+  const PAGE_ROLES = {
+    dashboard: ["admin", "guest", "gestion_etablissement", "gestion_vehicule", "gestion_globale"],
+    etablissements: ["admin", "guest", "gestion_etablissement", "gestion_globale"],
+    vehicules: ["admin", "guest", "gestion_vehicule", "gestion_globale"],
+    "contrats-injection": ["admin", "guest", "gestion_globale"],
+    utilisateurs: ["admin"],
+  };
+  const canAccess = (page) => (PAGE_ROLES[page] || []).includes(user?.role);
+
   // Vérification de la session (token existant) au tout premier chargement
   if (loading) {
     return (
@@ -36,6 +47,7 @@ function App() {
   }
 
   const handleNavigate = (key) => {
+    if (!canAccess(key)) return; // bloquer l'accès aux pages hors périmètre
     setOpenContrat(null); // quitter la fiche contrat si on clique un menu sidebar
     setReopenEtab(null);
     setActive(key);
@@ -47,6 +59,7 @@ function App() {
   };
 
   const renderPage = () => {
+    if (!canAccess(active)) return <DashboardPage />;
     if (active === "etablissements" && openContrat) {
       return (
         <ContratPage
@@ -70,7 +83,7 @@ function App() {
         );
       case "vehicules": return <VehiculesPage />;
       case "contrats-injection": return <ContratsInjectionPage />;
-      case "utilisateurs": return user?.role === "admin" ? <UsersPage /> : <DashboardPage />;
+      case "utilisateurs": return <UsersPage />;
       default: return null;
     }
   };
