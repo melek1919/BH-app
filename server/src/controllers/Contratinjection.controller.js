@@ -11,13 +11,13 @@ const liste = async (req, res, next) => {
         const { rows } = await pool.query(`
             SELECT
                 c.id, c.numero_police, c.validite_du, c.validite_au,
-                c.statut_injection, c.date_derniere_injection, c.numero_lot,
-                e.nom AS etablissement_nom, e.gouvernorat,
+                c.statut_injection, c.date_derniere_injection, c.numero_lot, c.created_at,
+                e.id AS etablissement_id, e.nom AS etablissement_nom, e.gouvernorat,
                 COUNT(v.id) FILTER (WHERE v.statut_retrait = 'actif') AS nb_vehicules
             FROM contrat c
             JOIN etablissement e ON e.id = c.etablissement_id
             LEFT JOIN vehicule v ON v.contrat_id = c.id
-            GROUP BY c.id, e.nom, e.gouvernorat
+            GROUP BY c.id, c.created_at, e.id, e.nom, e.gouvernorat
             ORDER BY e.nom, c.numero_police
         `);
         res.json(rows);

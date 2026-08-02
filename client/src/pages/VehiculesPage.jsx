@@ -597,6 +597,7 @@ export default function VehiculesPage() {
               <tr style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: "#FAFBFC" }}>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 16px" }}>Véhicule</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Établissement</th>
+                <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Contrat</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "left", padding: "12px 8px" }}>Usage</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "center", padding: "12px 8px" }}>Puissance</th>
                 <th style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textAlign: "center", padding: "12px 8px" }}>Places</th>
@@ -627,6 +628,11 @@ export default function VehiculesPage() {
                     </td>
                     <td style={{ padding: "12px 8px", fontSize: 12.5, color: "#161B22" }}>
                       {v.etablissement_nom || "—"}
+                    </td>
+                    <td style={{ padding: "12px 8px" }}>
+                      <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: 500, padding: "3px 8px", borderRadius: 6, backgroundColor: "#F5F6F8", color: "#161B22", whiteSpace: "nowrap" }}>
+                        {v.numero_police || "—"}
+                      </span>
                     </td>
                     <td style={{ padding: "12px 8px" }}>
                       <span style={{ fontSize: 11.5, fontWeight: 500, padding: "3px 9px", borderRadius: 20, backgroundColor: tag.bg, color: tag.fg, whiteSpace: "nowrap" }}>

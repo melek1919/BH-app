@@ -54,13 +54,15 @@ function App() {
   };
 
   const handleBackFromContrat = () => {
-    setReopenEtab(openContrat?.etablissement || null);
+    if (openContrat?.from === "etablissements") {
+      setReopenEtab(openContrat.etablissement || null);
+    }
     setOpenContrat(null);
   };
 
   const renderPage = () => {
     if (!canAccess(active)) return <DashboardPage />;
-    if (active === "etablissements" && openContrat) {
+    if (openContrat) {
       return (
         <ContratPage
           contrat={openContrat.contrat}
@@ -76,13 +78,18 @@ function App() {
       case "etablissements":
         return (
           <EtablissementsPage
-            onOpenContrat={(etablissement, contrat) => setOpenContrat({ etablissement, contrat })}
+            onOpenContrat={(etablissement, contrat) => setOpenContrat({ from: "etablissements", etablissement, contrat })}
             reopenEtablissement={reopenEtab}
             onReopenConsumed={() => setReopenEtab(null)}
           />
         );
       case "vehicules": return <VehiculesPage />;
-      case "contrats-injection": return <ContratsInjectionPage />;
+      case "contrats-injection":
+        return (
+          <ContratsInjectionPage
+            onOpenContrat={(contrat) => setOpenContrat({ from: "injection", contrat, etablissement: { id: contrat.etablissement_id, nom: contrat.etablissement_nom } })}
+          />
+        );
       case "utilisateurs": return <UsersPage />;
       default: return null;
     }

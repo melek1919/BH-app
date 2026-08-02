@@ -37,7 +37,7 @@ function LotBadge({ numero }) {
   );
 }
 
-export default function ContratsInjectionPage() {
+export default function ContratsInjectionPage({ onOpenContrat }) {
   const { user } = useAuth();
   const [contrats, setContrats] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -279,17 +279,18 @@ export default function ContratsInjectionPage() {
                     key={c.id}
                     style={{
                       borderBottom: `1px solid ${BORDER}`,
-                      cursor: eligible ? "pointer" : "default",
+                      cursor: "pointer",
                       backgroundColor: isSelected ? "#EAF1FB" : "transparent",
                       opacity: eligible ? 1 : 0.6,
                       transition: "background-color .12s",
                     }}
-                    onClick={() => toggleOne(c)}
+                    title={eligible ? "Voir la fiche du contrat" : "Déjà injecté — voir la fiche"}
+                    onClick={() => onOpenContrat?.(c)}
                     onMouseEnter={(e) => { if (!isSelected && eligible) e.currentTarget.style.backgroundColor = "#FAFBFC"; }}
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = "transparent"; }}
                   >
                     <td style={{ padding: "13px 16px" }} onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={isSelected} onChange={() => toggleOne(c)} disabled={!eligible} title={!eligible ? "Déjà injecté" : undefined} />
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleOne(c)} disabled={!eligible} title={!eligible ? "Déjà injecté" : "Sélectionner pour injection"} />
                     </td>
                     <td style={{ padding: "13px 8px" }}>
                       <div className="d-flex align-items-center gap-2">

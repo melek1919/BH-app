@@ -360,14 +360,16 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
     const repartitionUsage = Object.values(
       actifs.reduce((acc, v) => {
         const key = v.usage || "Non renseigné";
-        if (!acc[key]) acc[key] = { name: key, value: 0, ...USAGE_TAG(key) };
+        if (!acc[key]) acc[key] = { name: key, value: 0, total: 0, ...USAGE_TAG(key) };
         acc[key].value += 1;
+        const detail = tarif?.details?.find((d) => d.immatriculation === v.immatriculation);
+        if (detail) acc[key].total += Number(detail.totalAvecPTA) || 0;
         return acc;
       }, {})
     );
 
     return { joursRestants, totalPlaces, ajoutesEnCoursAnnee, repartitionUsage };
-  }, [vehicules, contrat.validite_au, contrat.created_at]);
+  }, [vehicules, contrat.validite_au, contrat.created_at, tarif]);
 
   const buildPayload = (form) => ({
     contrat_id: contrat.id,
@@ -547,7 +549,10 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                       <Pie data={stats.repartitionUsage} dataKey="value" nameKey="name" innerRadius={42} outerRadius={64} paddingAngle={3} stroke="none" strokeWidth={0}>
                         {stats.repartitionUsage.map((d, i) => <Cell key={i} fill={d.fg} />)}
                       </Pie>
-                      <Tooltip formatter={(v, n) => [`${v} véhicule${v > 1 ? "s" : ""}`, n]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid " + BORDER }} />
+                      <Tooltip formatter={(v, n, item) => {
+                        const total = item?.payload?.total;
+                        return total > 0 ? [`${total.toFixed(2)} DT (${v} véh.)`, n] : [`${v} véhicule${v > 1 ? "s" : ""}`, n];
+                      }} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid " + BORDER }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -556,7 +561,9 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
                     <div key={i} className="d-flex align-items-center gap-2 mb-2">
                       <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: d.fg, flexShrink: 0 }} />
                       <span style={{ fontSize: 12.5, color: "#161B22" }}>{d.name}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: MUTED, marginLeft: "auto" }}>{d.value}</span>
+                      <span className="ms-auto" style={{ fontSize: 12, fontWeight: 500, padding: "3px 10px", borderRadius: 20, backgroundColor: "#F3E8FD", color: "#6B3FA0", whiteSpace: "nowrap", fontFamily: "monospace" }}>
+                        {d.total > 0 ? `${d.total.toFixed(2)} DT` : `${d.value} véh.`}
+                      </span>
                     </div>
                   ))}
                 </div>
