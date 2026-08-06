@@ -3,7 +3,9 @@
 // Toute la logique fetch/URL vit ici — les pages ne font plus jamais
 // de fetch("http://...") en dur, elles importent ces fonctions.
 
-export const API_BASE = "http://localhost:5000/api";
+// Le backend est atteint via le reverse proxy Nginx (même origine) en prod.
+// En dev local (sans proxy), on retombe sur localhost:5000.
+export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const TOKEN_KEY = "bh_token";
 
 export const tokenStorage = {
@@ -11,8 +13,6 @@ export const tokenStorage = {
   set: (token) => localStorage.setItem(TOKEN_KEY, token),
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
-// Idéalement, bascule vers une variable d'env Vite une fois en prod :
-// const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /**
  * Wrapper fetch générique : gère le JSON, les erreurs HTTP,

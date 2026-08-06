@@ -11,8 +11,21 @@ import utilisateurRoutes from './routes/utilisateur.routes.js';
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost")
+  .split(",").map((o) => o.trim()).filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  },
+}));
 app.use(express.json());
+
+// Public : healthcheck (avant les routes protégées pour rester accessible)
+app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+});
 
 // Public : uniquement le login
 app.use('/api/auth', authRoutes);
