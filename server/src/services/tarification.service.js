@@ -5,6 +5,7 @@ const USAGES = {
   AMBULANCE: "AMBULANCES/POMPIERS/POMPES",
   TRANSPORT: "TRANSPORT DE PERSONNEL (utilitaires)",
   U2: "VEHICULES COMMERC. PLUS DE 3.5 T (U2)",
+  U2_JUSQUA: "VEHICULES COMMERC. JUSQU'A 3.5 T (U2)",
   REMORQUE: "TRAC. à ROUES SANS LOCAT. AVEC REMORQUE",
   AGRICOLE: "REMORQUES AGRICOLES PLUS DE 3.5 T",
   MOTO125: "MOTOCYCLES DE 50 à 125 CM3",
@@ -12,7 +13,14 @@ const USAGES = {
 };
 
 function normalize(s) {
-  return (s || "").trim().toUpperCase().replace(/['\s]/g, "");
+  return (s || "")
+    .trim()
+    .toUpperCase()
+    // Normalise les variantes orthographiques de "COMMERCIAL(S)" pour qu'elles
+    // se comparent à "COMMERC." (JUSQU'A 3.5T) des usages standards.
+    .replace(/\bCOMMERCIALS?\b/g, "COMMERC")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // retire les accents
+    .replace(/[^0-9A-Z]/g, ""); // retire tout caractère non alphanumérique (points, apostrophes, espaces, parenthèses)
 }
 
 function eq(usage, ref) {
@@ -76,6 +84,10 @@ function getVariable(vehicule) {
   }
 
   if (eq(usage, USAGES.U2)) {
+    return 257 + 21 * (ptac - 3.5);
+  }
+
+  if (eq(usage, USAGES.U2_JUSQUA)) {
     return 257 + 21 * (ptac - 3.5);
   }
 

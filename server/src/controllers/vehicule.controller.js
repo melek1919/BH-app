@@ -1,5 +1,13 @@
 import model from '../models/vehicule.model.js';
 import { vehiculeSchema, retraitSchema } from '../validators/vehicule.validator.js';
+import { matchUsage } from '../services/usageMapping.js';
+
+// Normalise l'usage : tout libellé envoyé par l'établissement qui n'est pas un
+// usage standard est remplacé par l'usage standard correspondant (ex. DUMPER → PRIVE OU AFFAIRES).
+const normalizeUsage = (data) => {
+    if (data && data.usage) data.usage = matchUsage(data.usage, data.ptac) || data.usage;
+    return data;
+};
 
 const getAll = async (req, res, next) => {
     try { res.json(await model.findAll()); }
@@ -36,6 +44,7 @@ const create = async (req, res, next) => {
     if (error) {
         return res.status(400).json({ message: 'données invalides', details: error.details.map((d) => d.message) });
     }
+    normalizeUsage(value);
     try {
         const created = await model.create(value);
         res.status(201).json(created);
@@ -50,6 +59,7 @@ const update = async (req, res, next) => {
     if (error) {
         return res.status(400).json({ message: 'données invalides', details: error.details.map((d) => d.message) });
     }
+    normalizeUsage(value);
     try {
         const updated = await model.update(req.params.id, value);
         if (!updated) return res.status(404).json({ message: 'vehicule introuvable' });

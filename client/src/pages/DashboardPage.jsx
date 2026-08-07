@@ -7,11 +7,14 @@ import {
   CartesianGrid,
   BarChart,
   Bar,
-  ComposedChart,
-  Line,
   PieChart,
   Pie,
   Cell,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
   Tooltip as RechartsTooltip,
 } from "recharts";
 import { etablissementsApi, contratsApi, vehiculesApi, tarificationApi } from "../services/api";
@@ -73,15 +76,13 @@ function PieTooltip({ active, payload }) {
 
 const fmtDT = (n) => n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " DT";
 
-function EvolutionTooltip({ active, payload, total }) {
+function UsageTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const pct = total > 0 ? Math.round((d.value / total) * 100) : 0;
   return (
     <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, boxShadow: "0 2px 8px rgba(15,31,56,0.08)" }}>
-      <p className="mb-0 fw-semibold" style={{ color: NAVY }}>{d.month}</p>
-      <p className="mb-0" style={{ color: d.value === payload[0].payload.max ? "#B8912E" : "#1E7B3A" }}>{fmtDT(d.value)} · {pct}%</p>
-      <p className="mb-0" style={{ color: MUTED }}>cumul {fmtDT(d.cumul)}</p>
+      <p className="mb-0 fw-semibold" style={{ color: NAVY }}>{d.usage}</p>
+      <p className="mb-0" style={{ color: MUTED }}>{d.value} véhicules</p>
     </div>
   );
 }
@@ -202,26 +203,23 @@ export default function DashboardPage() {
 
   const topVehicules = topData?.topVehicules || [];
   const topContrats = topData?.topContrats || [];
-  const evolution = topData?.evolution || [];
   const brackets = topData?.brackets || [];
   const totalBrackets = brackets.reduce((s, d) => s + d.value, 0);
 
-  const evolutionData = useMemo(() => {
-    let acc = 0;
-    const mapped = evolution.map((d) => {
-      const value = Number(d.value) || 0;
-      acc += value;
-      return { month: d.month, value, cumul: acc };
-    });
-    const max = mapped.length ? Math.max(...mapped.map((d) => d.value)) : 0;
-    return mapped.map((d) => ({ ...d, max }));
-  }, [evolution]);
+  // Répartition de la flotte par usage standard (radar).
+  const usageDist = useMemo(() => {
+    const freq = {};
+    for (const v of vehiculesActifs) {
+      const u = (v.usage || "Non défini").trim();
+      freq[u] = (freq[u] || 0) + 1;
+    }
+    return Object.entries(freq)
+      .map(([usage, value]) => ({ usage: usage.length > 22 ? usage.slice(0, 20) + "…" : usage, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
+  }, [vehiculesActifs]);
 
-  const totalCA = evolutionData.reduce((s, d) => s + d.value, 0);
-  const moyenneCA = evolutionData.length ? totalCA / evolutionData.length : 0;
-  const bestMonth = evolutionData.length
-    ? evolutionData.reduce((a, b) => (b.value > a.value ? b : a))
-    : null;
+  const maxUsage = usageDist.length ? Math.max(...usageDist.map((d) => d.value)) : 1;
 
   if (loading) {
     return (
@@ -318,51 +316,32 @@ export default function DashboardPage() {
       </div>
 
       <div className="row g-3 mt-3">
-        {/* ÉVOLUTION CHIFFRE D'AFFAIRES */}
+        {/* RÉPARTITION DE LA FLOTTE PAR USAGE — RADAR */}
         <div className="col-lg-7">
-          <Panel title="Évolution du chiffre d'affaires" action={<span style={{ fontSize: 11.5, color: MUTED }}>par mois</span>}>
-            {evolution.length === 0 ? (
+          <Panel title="Répartition de la flotte par usage" action={<span style={{ fontSize: 11.5, color: MUTED }}>{vehiculesActifs.length} véhicules actifs</span>}>
+            {usageDist.length === 0 ? (
               <p style={{ fontSize: 12.5, color: MUTED }}>Aucune donnée</p>
             ) : (
               <>
-                <div className="d-flex align-items-center gap-4 mb-1 flex-wrap">
-                  <div>
-                    <p className="mb-0 fw-bold" style={{ fontSize: 19, color: "#161B22" }}>{fmtDT(totalCA)}</p>
-                    <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>CA total ({evolutionData.length} mois)</p>
-                  </div>
-                  <div>
-                    <p className="mb-0 fw-bold" style={{ fontSize: 19, color: "#1E7B3A" }}>{fmtDT(moyenneCA)}</p>
-                    <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>Moyenne / mois</p>
-                  </div>
-                  {bestMonth && (
-                    <div className="ms-auto">
-                      <p className="mb-0 fw-bold" style={{ fontSize: 13, color: "#B8912E" }}>{fmtDT(bestMonth.value)}</p>
-                      <p className="mb-0" style={{ fontSize: 11.5, color: MUTED }}>Meilleur mois · {bestMonth.month}</p>
-                    </div>
-                  )}
+                <div className="d-flex align-items-center justify-content-center" style={{ height: 210 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={usageDist} cx="50%" cy="50%" outerRadius="72%">
+                      <PolarGrid stroke={BORDER} />
+                      <PolarAngleAxis dataKey="usage" tick={{ fontSize: 10.5, fill: "#161B22", fontWeight: 500 }} />
+                      <PolarRadiusAxis angle={90} domain={[0, maxUsage]} tick={false} axisLine={false} />
+                      <RechartsTooltip content={<UsageTooltip />} />
+                      <Radar name="usage" dataKey="value" stroke="#2B6CB0" strokeWidth={2.5} fill="#2B6CB0" fillOpacity={0.35} />
+                    </RadarChart>
+                  </ResponsiveContainer>
                 </div>
-                <ResponsiveContainer width="100%" height={178}>
-                  <ComposedChart data={evolutionData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="evolBar" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#1E7B3A" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#1E7B3A" stopOpacity={0.45} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid vertical={false} stroke={BORDER} />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="ca" tick={{ fontSize: 11, fill: MUTED }} axisLine={false} tickLine={false} width={55}
-                      tickFormatter={(v) => v.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} />
-                    <YAxis yAxisId="cumul" orientation="right" hide />
-                    <RechartsTooltip content={<EvolutionTooltip total={totalCA} />} cursor={{ fill: "#F3F5F8" }} />
-                    <Bar yAxisId="ca" dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={44}>
-                      {evolutionData.map((d) => (
-                        <Cell key={d.month} fill={bestMonth && d.month === bestMonth.month ? "#B8912E" : "url(#evolBar)"} />
-                      ))}
-                    </Bar>
-                    <Line yAxisId="cumul" type="monotone" dataKey="cumul" stroke="#0B1F38" strokeWidth={2} dot={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <div className="d-flex flex-wrap align-items-center justify-content-center gap-2 mt-1">
+                  {usageDist.slice(0, 3).map((d, i) => (
+                    <span key={d.usage} className="d-flex align-items-center gap-1" style={{ fontSize: 11, color: MUTED }}>
+                      <span style={{ width: 9, height: 9, borderRadius: "50%", background: ["#2B6CB0", "#1E7B3A", "#B8912E"][i], display: "inline-block" }} />
+                      <b style={{ color: "#161B22" }}>{d.value}</b> {d.usage}
+                    </span>
+                  ))}
+                </div>
               </>
             )}
           </Panel>

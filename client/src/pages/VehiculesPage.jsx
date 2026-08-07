@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Car, Search, Plus, X, RotateCcw, Trash2, Pencil, Loader2, AlertCircle, CheckCircle2, Upload, FileSpreadsheet } from "lucide-react";
 import { vehiculesApi, importApi, contratsApi } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
+import { USAGE_OPTIONS, USAGE_TAG, normalizeUsage } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
 import Pagination from "../components/Pagination";
 import SortBar from "../components/SortBar";
@@ -425,7 +425,7 @@ export default function VehiculesPage() {
   const buildPayload = (form) => ({
     contrat_id: Number(form.contrat_id),
     immatriculation: form.immatriculation,
-    usage: form.usage,
+    usage: normalizeUsage(form.usage),
     marque: form.marque || null,
     type_vehicule: form.type_vehicule || null,
     numero_serie: form.numero_serie || null,

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { vehiculeSchema } from "../src/validators/vehicule.validator.js";
 import { matchUsage } from "../src/services/usageMapping.js";
+import { calcVehicule } from "../src/services/tarification.service.js";
 
 describe("validators/vehicule — règles métier enrichies", () => {
   const base = {
@@ -58,6 +59,8 @@ describe("services/usageMapping — matching d'usage établissement", () => {
     expect(matchUsage("AMB")).toBe("AMBULANCES/POMPIERS/POMPES");
     expect(matchUsage("MINI-BUS")).toBe("TRANSPORT DE PERSONNEL (utilitaires)");
     expect(matchUsage("REMOQUE")).toBe("REMORQUES AGRICOLES PLUS DE 3.5 T");
+    expect(matchUsage("DUMPER")).toBe("PRIVE OU AFFAIRES");
+    expect(matchUsage("DEMPER")).toBe("PRIVE OU AFFAIRES");
   });
 
   it("est insensible à la casse (variantes)", () => {
@@ -74,5 +77,35 @@ describe("services/usageMapping — matching d'usage établissement", () => {
     expect(matchUsage("qqq inconnu")).toBeNull();
     expect(matchUsage("")).toBeNull();
     expect(matchUsage(null)).toBeNull();
+  });
+});
+
+describe("services/tarification — calcul RC/commercial (U1 vs U2)", () => {
+  it("calcule un RC non nul pour le commercial jusqu'à 3.5T (U1) quelle que soit l'orthographe", () => {
+    const a = calcVehicule({ usage: "VEHICULES COMMERC. JUSQU'A 3.5 T (U1)", puissance: 8, nb_places: 1 });
+    const b = calcVehicule({ usage: "VEHICULES COMMERC. JUSQU A 3.5 T (U1)", puissance: 8, nb_places: 1 });
+    expect(a.RC).toBeGreaterThan(0);
+    expect(b.RC).toBeGreaterThan(0);
+    expect(a.RC).toBe(b.RC);
+  });
+
+  it("applique la formule PTAC au commercial JUSQU'A 3.5T (U2) = 257 + 21*(PTAC-3.5)", () => {
+    const r = calcVehicule({ usage: "VEHICULES COMMERC. JUSQU A 3.5 T (U2)", puissance: 8, nb_places: 1, ptac: 18 });
+    expect(r.variable).toBe(561.5);
+    expect(r.RC).toBeGreaterThan(0);
+  });
+
+  it("calcule un RC non nul pour le commercial plus de 3.5T (U2), y compris l'orthographe COMERCIALS", () => {
+    const a = calcVehicule({ usage: "VEHICULES COMMERC. PLUS DE 3.5 T (U2)", puissance: 23, nb_places: 1, ptac: 18 });
+    const b = calcVehicule({ usage: "VEHICULES COMMERCIALS PLUS DE 3.5 T (U2)", puissance: 23, nb_places: 1, ptac: 18 });
+    expect(a.RC).toBeGreaterThan(0);
+    expect(b.RC).toBeGreaterThan(0);
+    expect(a.RC).toBe(b.RC);
+  });
+
+  it("U1 et U2 restent distincts (même puissance)", () => {
+    const u1 = calcVehicule({ usage: "VEHICULES COMMERC. JUSQU'A 3.5 T (U1)", puissance: 8, nb_places: 1 });
+    const u2 = calcVehicule({ usage: "VEHICULES COMMERC. PLUS DE 3.5 T (U2)", puissance: 8, nb_places: 1, ptac: 8 });
+    expect(u1.RC).not.toBe(u2.RC);
   });
 });

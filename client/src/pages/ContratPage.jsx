@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { vehiculesApi, tarificationApi, tokenStorage, API_BASE } from "../services/api";
-import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
+import { USAGE_OPTIONS, USAGE_TAG, normalizeUsage } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
 import Pagination from "../components/Pagination";
 import SortBar from "../components/SortBar";
@@ -368,7 +368,7 @@ export default function ContratPage({ contrat, etablissement, onBack }) {
   const buildPayload = (form) => ({
     contrat_id: contrat.id,
     immatriculation: form.immatriculation,
-    usage: form.usage,
+    usage: normalizeUsage(form.usage),
     marque: form.marque || null,
     type_vehicule: form.type_vehicule || null,
     numero_serie: form.numero_serie || null,
