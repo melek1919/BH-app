@@ -1,4 +1,5 @@
 import xlsx from 'xlsx';
+import { matchUsage } from './usageMapping.js';
 
 // Template fixe — colonnes attendues dans le fichier Excel (ligne 1 = en-têtes)
 const REQUIRED_HEADERS = ['N° Police', 'Immatriculation', 'Usage', 'Nb Places'];
@@ -131,6 +132,9 @@ export function parseVehiculesFile(buffer) {
     const rows = rawRows.map((raw, i) => {
         const lineNumber = i + 2; // ligne 1 = en-têtes, tableau 0-indexé
         const data = normalizeRow(raw);
+        // Normalise l'usage envoyé par l'établissement vers l'usage standard
+        // (matching) afin qu'il soit correctement tarifé.
+        data.usage = matchUsage(data.usage, data.ptac) || data.usage;
         const errors = validateRow(data);
         return { lineNumber, data, errors, valid: errors.length === 0 };
     });

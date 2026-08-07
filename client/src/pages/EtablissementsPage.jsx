@@ -146,7 +146,6 @@ function EtablissementModal({ mode, initialData, onClose, onSubmit, submitting }
 function NewContratModal({ onClose, onSubmit, submitting }) {
   const [numeroPolice, setNumeroPolice] = useState("");
   const [error, setError] = useState("");
-  const annee = new Date().getFullYear();
 
   const handleSubmit = () => {
     if (!numeroPolice.trim()) return setError("Champ requis");
@@ -164,11 +163,6 @@ function NewContratModal({ onClose, onSubmit, submitting }) {
         <label style={{ fontSize: 12, color: MUTED, fontWeight: 600, letterSpacing: "0.3px", display: "block", margin: "6px 0 4px" }}>N° police *</label>
         <input className="form-control" style={{ fontSize: 13, borderColor: error ? "#B3261E" : BORDER }} value={numeroPolice} onChange={(e) => { setNumeroPolice(e.target.value); setError(""); }} placeholder="POL-2026-013" />
         {error && <p style={{ fontSize: 11.5, color: "#B3261E", margin: "4px 0 0" }}>{error}</p>}
-
-        <div className="d-flex justify-content-between p-2 rounded-3 mt-3" style={{ backgroundColor: "#F3F5F8", fontSize: 12.5 }}>
-          <span style={{ color: MUTED }}>Période calculée automatiquement</span>
-          <b style={{ color: NAVY }}>01/01/{annee} → 31/12/{annee}</b>
-        </div>
 
         <div className="d-flex gap-2 mt-4">
           <button className="btn flex-grow-1" style={{ fontSize: 13, borderColor: BORDER, color: MUTED }} onClick={onClose} disabled={submitting}>Annuler</button>

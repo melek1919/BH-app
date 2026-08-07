@@ -28,6 +28,7 @@ import { USAGE_OPTIONS, USAGE_TAG } from "../components/usageConfig";
 import AutocompleteUsage from "../components/AutocompleteUsage";
 import Pagination from "../components/Pagination";
 import SortBar from "../components/SortBar";
+import { validateVehiculeForm } from "../utils/vehiculeValidation";
 
 const NAVY = "#0B1F38";
 const MUTED = "#6B7684";
@@ -69,14 +70,7 @@ function VehiculeModal({ mode = "create", initialData, contrat, onClose, onSubmi
   const update = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
   const handleSubmit = () => {
-    const nextErrors = {};
-    if (!form.immatriculation.trim()) nextErrors.immatriculation = "Champ requis";
-    if (!form.nb_places) nextErrors.nb_places = "Champ requis";
-    else if (!/^[0-9]+$/.test(form.nb_places)) nextErrors.nb_places = "Doit être un nombre";
-    if (form.puissance && !/^[0-9]+$/.test(form.puissance)) nextErrors.puissance = "Doit être un nombre";
-    if (!form.usage) nextErrors.usage = "Champ requis";
-    const ptacRequired = form.usage === "VEHICULES COMMERC. PLUS DE 3.5 T (U2)" || form.usage === "REMORQUES AGRICOLES PLUS DE 3.5 T";
-    if (ptacRequired && !form.ptac) nextErrors.ptac = "PTAC requis pour cet usage";
+    const nextErrors = validateVehiculeForm(form);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     onSubmit(form);
